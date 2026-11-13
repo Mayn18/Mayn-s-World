@@ -82,3 +82,18 @@ The initial CI workflow checks only what exists (documentation and templates). A
 Reason: a green check must not imply that code was tested when no code exists.
 
 Trade-off: CI coverage grows gradually and requires deliberate enabling.
+
+## ADR-012 — Task 001 tooling: npm, Vitest, one root package, Tailwind v4
+**Status:** Accepted
+
+- **npm** is the package manager. It ships with Node, so there is nothing extra to install or explain. The committed `package-lock.json` is the source of truth for versions, and CI installs with `npm ci`.
+- **One root `package.json`**, not a workspace monorepo. Client, server and shared code live under `src/` as in `docs/architecture.md`. Workspaces can be added later if there is a concrete need.
+- **Vitest** runs tests. It reuses the Vite config and handles TypeScript without extra setup.
+- **Three tsconfigs.** `tsconfig.client.json` (browser: DOM types, bundler resolution), `tsconfig.server.json` (Node types, NodeNext resolution) and `tsconfig.build.json` (emits the server to `dist/server`). Browser and Node code need different type libraries, and separating them stops one from using the other's globals by accident.
+- **Dev:** Vite proxies `/api` to Hono, so the browser sees one origin in development as in production (ADR-003) and no CORS configuration exists.
+- **Production:** `vite build` outputs to `dist/client`; Hono serves it and `/api/*` from one origin. `npm start` runs the compiled server.
+- **Shared contract:** the `/api/health` response type and a runtime type guard live in `src/shared/health.ts`. Schema-validation libraries are deferred until the API has inputs that need them.
+- **Health path:** the endpoint is `/api/health`. `docs/architecture.md` mentions `/health` for Docker and Render health checks; reconcile that in the Docker task (for example with a root alias).
+- **Linting is deferred.** No linter or formatter is configured yet.
+
+Trade-off: no linter means style and some bug classes are unchecked for now; the three-tsconfig layout is more files in exchange for stricter, clearer boundaries.
