@@ -1,0 +1,18 @@
+{
+  // Typechecks code that runs in Node (Hono) plus the Vite config file.
+  // NodeNext means relative imports need an explicit ".js" extension, even
+  // though the source file is ".ts". That is how Node's ES module loader works.
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "types": ["node"]
+  },
+  "include": ["src/server", "src/shared", "vite.config.ts"]
+}

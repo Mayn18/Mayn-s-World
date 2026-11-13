@@ -1,0 +1,19 @@
+{
+  // Typechecks code that runs in the browser (React). Bundler resolution matches
+  // how Vite resolves imports. The server has its own config because it needs
+  // Node types and must not see browser-only globals by accident.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src/client", "src/shared"]
+}
