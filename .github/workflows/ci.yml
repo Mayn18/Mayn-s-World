@@ -1,0 +1,87 @@
+# CI for Mayn's World.
+#
+# Current repository state: documentation and templates only, no application.
+# The only active job (`foundation`) checks that the required project files
+# exist. It does NOT lint, typecheck, test or build anything, because there is
+# nothing to run yet. A green check here means "the foundation files are present".
+#
+# The commented `app` job below is a starting point for Phase 1. Enable it only
+# after package.json, a lockfile and the scripts it calls actually exist, and
+# adjust the commands to match them. Do not uncomment it before then.
+#
+# Before treating this workflow as production-hardened, review every third-party
+# action and keep each one pinned to a reviewed commit SHA.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    name: Foundation files present
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v4.2.2 (commit SHA looked up from the upstream tag; review before relying on it)
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Check required files exist
+        shell: bash
+        run: |
+          missing=0
+          for f in \
+            CLAUDE.md README.md LICENSE \
+            docs/requirements.md docs/architecture.md docs/visual-design.md \
+            docs/development-roadmap.md docs/decisions.md \
+            .github/pull_request_template.md \
+            .github/ISSUE_TEMPLATE/bug_report.md \
+            .github/ISSUE_TEMPLATE/security_finding.md \
+            .github/ISSUE_TEMPLATE/feature_task.md; do
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f::Required file is missing"
+              missing=1
+            fi
+          done
+          exit $missing
+
+  # ---------------------------------------------------------------------------
+  # Phase 1+ (DISABLED). Uncomment once the application exists, then verify that
+  # every command matches the real package.json scripts and lockfile.
+  #
+  # app:
+  #   name: Install, typecheck, lint, test, build
+  #   runs-on: ubuntu-latest
+  #   services:
+  #     postgres:
+  #       image: postgres:17
+  #       env:
+  #         POSTGRES_PASSWORD: postgres
+  #       ports: ["5432:5432"]
+  #       options: >-
+  #         --health-cmd "pg_isready -U postgres"
+  #         --health-interval 5s --health-timeout 5s --health-retries 10
+  #   steps:
+  #     - uses: actions/checkout@<reviewed commit SHA>
+  #     - uses: actions/setup-node@<reviewed commit SHA>
+  #       with:
+  #         node-version: 24
+  #         cache: npm            # change if another package manager is chosen
+  #     - run: npm ci             # requires a committed lockfile
+  #     - run: npm run typecheck  # script must exist
+  #     - run: npm run lint       # script must exist
+  #     - run: npm test           # script must exist
+  #     - run: npm run build      # script must exist
+  #     # Migration tests against the postgres service belong here (Phase 2).
+  #
+  # docker:
+  #   name: Docker image build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@<reviewed commit SHA>
+  #     - run: docker build .   # requires the Dockerfile created in Phase 1
+  # ---------------------------------------------------------------------------
