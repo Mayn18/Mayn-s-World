@@ -6,7 +6,7 @@ The visual direction is inspired by my earlier project, [Beep-Bot](https://githu
 
 ## Status
 
-Phase 1, in progress. The repository contains documentation, GitHub templates and a working application skeleton: a React page that calls a Go `GET /api/health` endpoint, with the Go server also able to serve the built React app from one origin. There is no database, Docker setup or website content yet, and nothing is deployed.
+Phase 1, in progress. The repository contains documentation, GitHub templates and a working application skeleton: a React page that calls a Go `GET /api/health` endpoint, with the Go server also able to serve the built React app from one origin. A multi-stage Dockerfile builds the production image. There is no database, Docker Compose setup or website content yet, and nothing is deployed.
 
 ## Technology
 
@@ -14,7 +14,8 @@ Phase 1, in progress. The repository contains documentation, GitHub templates an
 - Backend: Go, standard library `net/http` only
 - Node.js 26 LTS and npm: frontend tooling and builds only, not the production backend
 - Tests: Vitest (frontend), Go `testing` + `httptest` (backend)
-- Planned: PostgreSQL 17 with `pgx` and Goose migrations, multi-stage Docker image, Docker Compose
+- Packaging: multi-stage Docker image (Node build stage, Go build stage, distroless non-root runtime)
+- Planned: PostgreSQL 17 with `pgx` and Goose migrations, Docker Compose
 - Initial hosting: Render Free and Neon Free, with a path to self-hosting on Linux
 
 ## Repository structure
@@ -27,6 +28,8 @@ internal/server/   routes, middleware, http.Server timeouts
 src/client/        React app (app/, api/, main.tsx, styles.css)
 index.html         Vite entry page
 vite.config.ts     Vite, Tailwind, test and dev-proxy configuration
+Dockerfile         production image: builds the React app and the Go binary
+.dockerignore      keeps secrets and build output out of the Docker build context
 docs/              requirements, architecture, design, roadmap, decisions
 ```
 
@@ -52,6 +55,13 @@ go run ./cmd/server        # serves the app and the API on http://localhost:8080
 ```
 
 Run commands from the repository root: the server looks for `dist/client` relative to the working directory.
+
+**In Docker** (requires Docker; no Node.js or Go needed on your machine):
+
+```bash
+docker build -t mayn-s-world .
+docker run --rm -p 8080:8080 mayn-s-world   # app and API on http://localhost:8080
+```
 
 ### Configuration
 
