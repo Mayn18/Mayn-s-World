@@ -32,7 +32,7 @@ docs/              requirements, architecture, design, roadmap, decisions
 
 ## Running it locally
 
-Requires Node.js 26 (see `.nvmrc`) and Go 1.24 or newer.
+Requires Node.js 26 (see `.nvmrc`) and Go 1.27 or newer.
 
 **Development** (two terminals; the browser uses Vite on port 5173):
 
