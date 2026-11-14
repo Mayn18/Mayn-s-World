@@ -138,6 +138,24 @@ func TestPanicBecomesJSON500(t *testing.T) {
 	}
 }
 
+func TestPanicAfterResponseStartedDoesNotAppendJSON(t *testing.T) {
+	logger := quietLogger()
+	partial := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("partial response"))
+		panic("late panic")
+	})
+
+	rec := get(recoverPanics(logger, partial), "GET", "/")
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want 201", rec.Code)
+	}
+	if got := rec.Body.String(); got != "partial response" {
+		t.Errorf("body = %q, want only the already-written response", got)
+	}
+}
+
 func TestNewSetsTimeoutsAndAddress(t *testing.T) {
 	srv := New(config.Config{Port: 9999, StaticDir: t.TempDir()}, quietLogger())
 
