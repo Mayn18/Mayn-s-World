@@ -1,8 +1,8 @@
 # Development Roadmap — Mayn's World
 
-Phases are listed in implementation order. Only Phase 0 is in progress.
+Phases are listed in implementation order. Phase 0's foundation pull request is merged; Phase 1 is in progress.
 
-## Phase 0 — Governance and design approval (in progress)
+## Phase 0 — Governance and design approval (foundation PR merged)
 - Confirm requirements, architecture and visual design.
 - Add `CLAUDE.md`, GitHub templates and a CI skeleton.
 - Establish protected `main`, branch naming and CI expectations.
@@ -10,18 +10,23 @@ Phases are listed in implementation order. Only Phase 0 is in progress.
 
 Acceptance: the foundation pull request is reviewed and approved by the owner; `main` is protected; the foundation CI check passes.
 
-## Phase 1 — Technical foundation
-- React, TypeScript and Vite.
-- Hono on Node.js.
-- Single-origin frontend/API serving.
-- Dockerfile and Docker Compose.
-- PostgreSQL 17 and health endpoint.
-- Basic CI: install, typecheck, lint, test, build, Docker build.
+## Phase 1 — Technical foundation (in progress)
+Done:
+- React, TypeScript, Vite and Tailwind CSS skeleton with a health-check page.
+- Go (`net/http`) backend with `GET /api/health`, JSON 404s, graceful shutdown and tests (ADR-013).
+- Single-origin serving: the Go server serves the built React app and `/api/*`.
+- CI: frontend checks, Go checks and an integration smoke test.
+
+Remaining:
+- Dockerfile (multi-stage: Node build stage, Go build stage, minimal runtime) and Docker Compose.
+- PostgreSQL 17 service and a database-aware health check, using `pgx`.
+- Linter and formatter choices for the frontend; `golangci-lint` for Go if wanted.
+- Docker build in CI.
 
 Acceptance: clean local Docker startup and production image startup.
 
 ## Phase 2 — Data foundation
-- Drizzle schema and migrations.
+- Goose SQL migrations and the `pgx` connection pool.
 - Admin identity/session foundation.
 - Projects and blog data models.
 - Contact submission and analytics models.

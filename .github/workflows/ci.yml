@@ -1,16 +1,20 @@
 # CI for Mayn's World.
 #
 # Active jobs:
-#   foundation - checks that the required project files exist.
-#   app        - installs dependencies from package-lock.json, then typechecks,
-#                tests and builds the application (Task 001).
+#   foundation  - checks that the required project files exist.
+#   frontend    - installs dependencies from package-lock.json, then typechecks,
+#                 tests and builds the React app (Node.js is frontend tooling only).
+#   go          - checks formatting, vets, tests and builds the Go backend.
+#   integration - builds the real React app, starts the real Go server and checks
+#                 that /api/health, API 404s, SPA fallback and static serving work
+#                 together on one origin.
 #
 # Still disabled (commented out below): the Postgres service and migration tests
 # (Phase 2) and the Docker image build (later Phase 1 task). Enable each only
 # when the files and scripts it depends on exist.
 #
-# `app` uses `npm ci`, which requires a committed package-lock.json and fails
-# without one. That is intentional: it forces installs to match the lockfile.
+# `frontend` uses `npm ci`, which requires a committed package-lock.json and
+# fails if it is out of sync with package.json. That is intentional.
 #
 # Before treating this workflow as production-hardened, review every third-party
 # action and keep each one pinned to a reviewed commit SHA.
@@ -52,8 +56,8 @@ jobs:
           done
           exit $missing
 
-  app:
-    name: Install, typecheck, test, build
+  frontend:
+    name: Frontend - install, typecheck, test, build
     runs-on: ubuntu-latest
     steps:
       # actions/checkout v4.2.2 (same pin as the foundation job)
@@ -71,13 +75,83 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  go:
+    name: Backend - format, vet, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      # actions/setup-go v6.5.0 (commit SHA looked up from the upstream tag with
+      # `git ls-remote`; review before relying on it). go.mod states the minimum
+      # language version; CI runs a currently supported Go release.
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.27'
+
+      - name: gofmt
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: go build ./...
+
+  integration:
+    name: Integration - React served by Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 26
+          cache: npm
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.27'
+
+      - run: npm ci
+      - run: npm run build # writes the React app to dist/client
+      - run: go build -o bin/server ./cmd/server
+
+      - name: Smoke test the production server
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT=8080 ./bin/server &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+
+          for _ in $(seq 1 30); do
+            curl -fs http://127.0.0.1:8080/api/health >/dev/null && break
+            sleep 0.5
+          done
+
+          base=http://127.0.0.1:8080
+          status() { curl -s -o /dev/null -w '%{http_code}' "$1"; }
+          # Bodies are captured first and matched afterwards. Piping curl into
+          # `grep -q` can fail spuriously under pipefail (grep exits early).
+          body() { curl -s "$1"; }
+
+          test "$(body $base/api/health)" = '{"status":"ok"}'
+          test "$(status $base/api/does-not-exist)" = 404
+          test "$(body $base/api/does-not-exist)" = '{"error":"not_found"}'
+          [[ "$(body $base/)" == *'id="root"'* ]]
+          [[ "$(body $base/some/frontend/route)" == *'id="root"'* ]]
+          test "$(status $base/assets/does-not-exist.js)" = 404
+          echo "Production server smoke test passed"
+
   # ---------------------------------------------------------------------------
   # Still DISABLED. Uncomment each job only when the files it needs exist.
   #
   # Lint is not configured yet (no linter chosen); add an `npm run lint` step
-  # to the `app` job when one is.
+  # to the `frontend` job (and golangci-lint to `go`) when chosen.
   #
-  # Phase 2: add a postgres:17 service to the `app` job and migration tests, e.g.
+  # Phase 2: add a postgres:17 service to the `go` job and migration tests, e.g.
   #   services:
   #     postgres:
   #       image: postgres:17

@@ -7,18 +7,12 @@
     "node": ">=26 <27"
   },
   "scripts": {
-    "dev:server": "tsx watch src/server/index.ts",
     "dev:client": "vite",
-    "typecheck": "tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.server.json",
+    "typecheck": "tsc --noEmit -p tsconfig.client.json",
     "test": "vitest run",
-    "build": "npm run build:client && npm run build:server",
-    "build:client": "vite build",
-    "build:server": "tsc -p tsconfig.build.json",
-    "start": "node dist/server/server/index.js"
+    "build": "vite build"
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.0",
-    "hono": "^4.6.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -29,7 +23,6 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "tailwindcss": "^4.0.0",
-    "tsx": "^4.19.0",
     "typescript": "~5.9.0",
     "vite": "^7.0.0",
     "vitest": "^3.0.0"
