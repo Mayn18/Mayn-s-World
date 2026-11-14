@@ -12,7 +12,7 @@ import (
 // http.ResponseWriter does not let us read back.
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
+	status      int
 	wroteHeader bool
 }
 
@@ -61,6 +61,7 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 // the client sees a network error instead of a response.
 func recoverPanics(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tracked := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		defer func() {
 			rec := recover()
 			if rec == nil {
@@ -76,7 +77,6 @@ func recoverPanics(logger *slog.Logger, next http.Handler) http.Handler {
 				handlers.WriteError(tracked, http.StatusInternalServerError, "internal_error")
 			}
 		}()
-		tracked := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(tracked, r)
 	})
 }
