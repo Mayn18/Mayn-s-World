@@ -16,12 +16,12 @@ Done:
 - Go (`net/http`) backend with `GET /api/health`, JSON 404s, graceful shutdown and tests (ADR-013).
 - Single-origin serving: the Go server serves the built React app and `/api/*`.
 - CI: frontend checks, Go checks and an integration smoke test.
+- Multi-stage Dockerfile (Node build stage, Go build stage, distroless non-root runtime) and a CI job that builds it, runs the container and smoke-tests it.
 
 Remaining:
-- Dockerfile (multi-stage: Node build stage, Go build stage, minimal runtime) and Docker Compose.
-- PostgreSQL 17 service and a database-aware health check, using `pgx`.
+- Docker Compose for local development, with a PostgreSQL 17 service and a named volume.
+- Database-aware health check, using `pgx`.
 - Linter and formatter choices for the frontend; `golangci-lint` for Go if wanted.
-- Docker build in CI.
 
 Acceptance: clean local Docker startup and production image startup.
 

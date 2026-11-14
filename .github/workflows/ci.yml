@@ -8,10 +8,12 @@
 #   integration - builds the real React app, starts the real Go server and checks
 #                 that /api/health, API 404s, SPA fallback and static serving work
 #                 together on one origin.
+#   docker      - builds the production image from the Dockerfile, checks it is
+#                 configured to run as non-root, runs the container, repeats the
+#                 smoke checks against it and checks graceful shutdown.
 #
 # Still disabled (commented out below): the Postgres service and migration tests
-# (Phase 2) and the Docker image build (later Phase 1 task). Enable each only
-# when the files and scripts it depends on exist.
+# (Phase 2). Enable it only when the files and scripts it depends on exist.
 #
 # `frontend` uses `npm ci`, which requires a committed package-lock.json and
 # fails if it is out of sync with package.json. That is intentional.
@@ -145,6 +147,50 @@ jobs:
           test "$(status $base/assets/does-not-exist.js)" = 404
           echo "Production server smoke test passed"
 
+  docker:
+    name: Docker - build image and smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Build the production image
+        run: docker build -t mayn-s-world:ci .
+
+      - name: Image runs as a non-root user
+        shell: bash
+        run: |
+          user="$(docker inspect --format '{{.Config.User}}' mayn-s-world:ci)"
+          echo "image user: $user"
+          test "$user" = 'nonroot:nonroot'
+
+      - name: Smoke test the container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name app -p 8080:8080 mayn-s-world:ci
+          trap 'docker logs app; docker rm -f app' EXIT
+
+          for _ in $(seq 1 30); do
+            curl -fs http://127.0.0.1:8080/api/health >/dev/null && break
+            sleep 0.5
+          done
+
+          base=http://127.0.0.1:8080
+          status() { curl -s -o /dev/null -w '%{http_code}' "$1"; }
+          body() { curl -s "$1"; }
+
+          test "$(body $base/api/health)" = '{"status":"ok"}'
+          test "$(body $base/api/does-not-exist)" = '{"error":"not_found"}'
+          [[ "$(body $base/)" == *'id="root"'* ]]
+          [[ "$(body $base/some/frontend/route)" == *'id="root"'* ]]
+          test "$(status $base/assets/does-not-exist.js)" = 404
+
+          # `docker stop` sends SIGTERM and waits. Exit code 0 means the server
+          # shut down gracefully; 137 would mean it ignored SIGTERM and was killed.
+          docker stop -t 15 app
+          test "$(docker inspect --format '{{.State.ExitCode}}' app)" = 0
+          echo "Container smoke test passed"
+
   # ---------------------------------------------------------------------------
   # Still DISABLED. Uncomment each job only when the files it needs exist.
   #
@@ -161,11 +207,4 @@ jobs:
   #       options: >-
   #         --health-cmd "pg_isready -U postgres"
   #         --health-interval 5s --health-timeout 5s --health-retries 10
-  #
-  # docker:
-  #   name: Docker image build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@<reviewed commit SHA>
-  #     - run: docker build .   # requires the Dockerfile created in Phase 1
   # ---------------------------------------------------------------------------
