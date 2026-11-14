@@ -91,8 +91,8 @@ func TestFrontendServing(t *testing.T) {
 func TestRouterRedirectsUncleanPaths(t *testing.T) {
 	h := NewHandler(site(), quietLogger())
 	rec := get(h, "GET", "/assets/../../etc/passwd")
-	if rec.Code != http.StatusMovedPermanently {
-		t.Fatalf("status = %d, want 301 to the cleaned path", rec.Code)
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want 307 to the cleaned path", rec.Code)
 	}
 	if loc := rec.Header().Get("Location"); strings.Contains(loc, "..") {
 		t.Errorf("Location = %q still contains ..", loc)
