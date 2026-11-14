@@ -1,13 +1,16 @@
 # CI for Mayn's World.
 #
-# Current repository state: documentation and templates only, no application.
-# The only active job (`foundation`) checks that the required project files
-# exist. It does NOT lint, typecheck, test or build anything, because there is
-# nothing to run yet. A green check here means "the foundation files are present".
+# Active jobs:
+#   foundation - checks that the required project files exist.
+#   app        - installs dependencies from package-lock.json, then typechecks,
+#                tests and builds the application (Task 001).
 #
-# The commented `app` job below is a starting point for Phase 1. Enable it only
-# after package.json, a lockfile and the scripts it calls actually exist, and
-# adjust the commands to match them. Do not uncomment it before then.
+# Still disabled (commented out below): the Postgres service and migration tests
+# (Phase 2) and the Docker image build (later Phase 1 task). Enable each only
+# when the files and scripts it depends on exist.
+#
+# `app` uses `npm ci`, which requires a committed package-lock.json and fails
+# without one. That is intentional: it forces installs to match the lockfile.
 #
 # Before treating this workflow as production-hardened, review every third-party
 # action and keep each one pinned to a reviewed commit SHA.
@@ -49,13 +52,32 @@ jobs:
           done
           exit $missing
 
+  app:
+    name: Install, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v4.2.2 (same pin as the foundation job)
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      # actions/setup-node v4.4.0 (commit SHA looked up from the upstream tag with
+      # `git ls-remote`; review before relying on it. Newer major versions exist.)
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 26
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
   # ---------------------------------------------------------------------------
-  # Phase 1+ (DISABLED). Uncomment once the application exists, then verify that
-  # every command matches the real package.json scripts and lockfile.
+  # Still DISABLED. Uncomment each job only when the files it needs exist.
   #
-  # app:
-  #   name: Install, typecheck, lint, test, build
-  #   runs-on: ubuntu-latest
+  # Lint is not configured yet (no linter chosen); add an `npm run lint` step
+  # to the `app` job when one is.
+  #
+  # Phase 2: add a postgres:17 service to the `app` job and migration tests, e.g.
   #   services:
   #     postgres:
   #       image: postgres:17
@@ -65,18 +87,6 @@ jobs:
   #       options: >-
   #         --health-cmd "pg_isready -U postgres"
   #         --health-interval 5s --health-timeout 5s --health-retries 10
-  #   steps:
-  #     - uses: actions/checkout@<reviewed commit SHA>
-  #     - uses: actions/setup-node@<reviewed commit SHA>
-  #       with:
-  #         node-version: 24
-  #         cache: npm            # change if another package manager is chosen
-  #     - run: npm ci             # requires a committed lockfile
-  #     - run: npm run typecheck  # script must exist
-  #     - run: npm run lint       # script must exist
-  #     - run: npm test           # script must exist
-  #     - run: npm run build      # script must exist
-  #     # Migration tests against the postgres service belong here (Phase 2).
   #
   # docker:
   #   name: Docker image build

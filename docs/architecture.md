@@ -1,6 +1,6 @@
 # Architecture — Mayn's World
 
-> Status: planned. No application code exists yet. This document describes the approved target architecture.
+> Status: target architecture. Only the application skeleton exists so far (React, Hono, `GET /api/health`); the database, Docker and everything else below are still planned.
 
 ## Principles
 1. Docker-first and provider-portable.
@@ -15,7 +15,7 @@
 - Tailwind CSS + custom CSS.
 - Motion for selected interface animations.
 - Hono on standard Node.js.
-- Node.js 24 LTS.
+- Node.js 26 LTS.
 - PostgreSQL 17.
 - Drizzle ORM and migrations.
 - Dockerfile + Docker Compose.
@@ -76,7 +76,7 @@ Use `.env.example` with placeholder values only. Production secrets belong in Re
 ## Docker
 Dockerfile:
 - Multi-stage.
-- Node.js 24 LTS, version pinned consistently.
+- Node.js 26 LTS, version pinned consistently.
 - Reproducible install from lockfile.
 - Lean production image.
 - Non-root runtime user.
@@ -131,6 +131,6 @@ For v1, use repository-managed static assets. If uploads are added, define an ap
 ## CI
 GitHub Actions should eventually run dependency installation, typecheck, lint, tests, production build, Docker build and migration tests.
 
-Current state: no application exists, so `.github/workflows/ci.yml` runs only a foundation check (required documentation and templates are present). The application jobs are included but disabled, and must be enabled phase by phase as the matching scripts and files are created. Package scripts are not assumed until they exist.
+Current state: `.github/workflows/ci.yml` runs a foundation check (required documentation and templates are present) and an `app` job (`npm ci`, typecheck, test, build). Lint, PostgreSQL migration tests and the Docker build are still disabled and must be enabled phase by phase as the matching scripts and files are created. Package scripts are not assumed until they exist.
 
 Pin third-party actions to reviewed immutable commit SHAs before treating the workflow as production-hardened.

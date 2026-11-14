@@ -7,7 +7,13 @@ The visual reference is the owner's repository: https://github.com/Mayn18/Beep-B
 Use its design philosophy (multiple themed worlds, pixel-art atmosphere, ambient effects, reusable UI skins and saved preferences) as inspiration. Do not copy its code or assets without checking their licenses.
 
 ## Current status
-Phase 0 (governance and design approval). No application code exists yet. See `docs/development-roadmap.md`.
+Phase 1 (technical foundation), Task 001 in progress: application skeleton and `GET /api/health`. No database, Docker, authentication or website features exist yet. See `docs/development-roadmap.md`.
+
+## Commands (these exist; nothing else should be assumed)
+- `npm run dev:server` starts Hono on port 3000 (override with `PORT`).
+- `npm run dev:client` starts Vite on port 5173 and proxies `/api` to Hono. Run both for development.
+- `npm run typecheck`, `npm test` (Vitest), `npm run build`, `npm start` (serves the build on one origin).
+- No linter or formatter is configured yet.
 
 ## Mandatory documents
 Before making changes, read:
@@ -62,7 +68,7 @@ Treat implementation as untrusted, including your own work.
 ## Architecture invariants
 - Frontend: React + TypeScript + Vite, Tailwind CSS and custom CSS, Motion for animation.
 - Backend: Hono running on standard Node.js.
-- Runtime target: Node.js 24 LTS, pinned consistently in project config and container.
+- Runtime target: Node.js 26 LTS, pinned consistently in project config and container.
 - Database: standard PostgreSQL 17.
 - ORM/migrations: Drizzle ORM. Migrations are the source of truth; no production schema push.
 - Local development: Docker Compose.
@@ -93,7 +99,7 @@ Treat implementation as untrusted, including your own work.
 - Keep modules small and single-purpose, following the source boundaries in `docs/architecture.md`.
 - Validate input at API boundaries with shared schemas.
 - Explain important architectural decisions in the PR description and, when lasting, in `docs/decisions.md`.
-- Linter, formatter and test tooling are chosen in Phase 1 and then documented here. Do not assume tools or package scripts that do not exist yet.
+- Package manager is npm; test runner is Vitest (see ADR-012). A linter and formatter are still to be chosen in Phase 1 and then documented here. Do not assume tools or package scripts that do not exist yet.
 
 ## Security requirements
 - Single administrator; no public registration.

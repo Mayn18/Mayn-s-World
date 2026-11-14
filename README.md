@@ -6,12 +6,24 @@ The visual direction is inspired by my earlier project, [Beep-Bot](https://githu
 
 ## Status
 
-Planning. This repository currently contains documentation and GitHub project templates only. There is no application code yet, and nothing is deployed.
+Phase 1, in progress. The repository contains documentation, GitHub templates and a minimal application skeleton: a React page that calls a Hono `GET /api/health` endpoint. There is no database, Docker setup or website content yet, and nothing is deployed.
+
+## Running it locally
+
+Requires Node.js 26 (see `.nvmrc`).
+
+```bash
+npm install
+npm run dev:server   # terminal 1: API on http://localhost:3000
+npm run dev:client   # terminal 2: app on http://localhost:5173
+```
+
+Other commands: `npm run typecheck`, `npm test`, `npm run build`, and `npm start` (serves the production build, API and page together, on port 3000).
 
 ## Planned technology
 
 - Frontend: React, TypeScript, Vite, Tailwind CSS, Motion
-- Backend: Hono on Node.js 24 LTS
+- Backend: Hono on Node.js 26 LTS
 - Database: PostgreSQL 17 with Drizzle ORM
 - Packaging: multi-stage Docker image; Docker Compose for local development
 - Initial hosting: Render Free and Neon Free, with a path to self-hosting on Linux

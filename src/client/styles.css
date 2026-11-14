@@ -1,0 +1,2 @@
+/* Tailwind v4 is enabled by this single import; the Vite plugin does the rest. */
+@import 'tailwindcss';

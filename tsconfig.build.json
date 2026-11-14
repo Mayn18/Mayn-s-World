@@ -1,0 +1,14 @@
+{
+  // Compiles the server to plain JavaScript in dist/server for `npm start`.
+  // Tests are excluded from the build output but are still typechecked by
+  // tsconfig.server.json. rootDir is "src" so the output keeps the
+  // server/ and shared/ folders: dist/server/server/index.js.
+  "extends": "./tsconfig.server.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist/server",
+    "rootDir": "src"
+  },
+  "include": ["src/server", "src/shared"],
+  "exclude": ["**/*.test.ts"]
+}
