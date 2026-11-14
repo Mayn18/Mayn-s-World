@@ -1,7 +1,6 @@
 {
-  // Typechecks code that runs in the browser (React). Bundler resolution matches
-  // how Vite resolves imports. The server has its own config because it needs
-  // Node types and must not see browser-only globals by accident.
+  // Typechecks the React app and the Vite config. Bundler resolution matches
+  // how Vite resolves imports. The backend is Go and is checked by `go vet`.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -15,5 +14,5 @@
     "verbatimModuleSyntax": true,
     "types": ["vite/client"]
   },
-  "include": ["src/client", "src/shared"]
+  "include": ["src/client", "vite.config.ts"]
 }
