@@ -1,11 +1,17 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 )
 
 func do(h http.Handler, method, target string) *httptest.ResponseRecorder {
@@ -14,8 +20,31 @@ func do(h http.Handler, method, target string) *httptest.ResponseRecorder {
 	return rec
 }
 
-func TestHealth(t *testing.T) {
-	rec := do(http.HandlerFunc(Health), http.MethodGet, "/api/health")
+func quietLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+
+// fakePinger stands in for the database pool, so these tests need no database.
+type fakePinger struct {
+	err error
+	// block makes Ping wait until its context ends, like a database that
+	// accepts the connection but never answers.
+	block bool
+
+	// Recorded from the context Ping receives.
+	deadline    time.Time
+	hadDeadline bool
+}
+
+func (f *fakePinger) Ping(ctx context.Context) error {
+	f.deadline, f.hadDeadline = ctx.Deadline()
+	if f.block {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return f.err
+}
+
+func TestHealthWithoutDatabase(t *testing.T) {
+	rec := do(Health(nil, quietLogger()), http.MethodGet, "/api/health")
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
@@ -26,6 +55,82 @@ func TestHealth(t *testing.T) {
 	// Exact string, not a parsed comparison: this pins the contract byte for byte.
 	if got := rec.Body.String(); got != `{"status":"ok"}` {
 		t.Errorf("body = %q, want %q", got, `{"status":"ok"}`)
+	}
+}
+
+func TestHealthDatabaseUp(t *testing.T) {
+	rec := do(Health(&fakePinger{}, quietLogger()), http.MethodGet, "/api/health")
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", got)
+	}
+	if got := rec.Body.String(); got != `{"status":"ok","database":"ok"}` {
+		t.Errorf("body = %q", got)
+	}
+}
+
+func TestHealthDatabaseDownReturns503WithoutLeakingDetails(t *testing.T) {
+	// An error shaped like a real driver error: it names a host and a password.
+	// None of it may reach the client.
+	cause := errors.New("dial tcp db.internal.example:5432: password authentication failed (password=hunter2)")
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+
+	rec := do(Health(&fakePinger{err: cause}, logger), http.MethodGet, "/api/health")
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", got)
+	}
+	want := `{"status":"unavailable","database":"unavailable"}`
+	if got := rec.Body.String(); got != want {
+		t.Errorf("body = %q, want %q", got, want)
+	}
+	for _, leaked := range []string{"hunter2", "db.internal", "dial tcp", "password"} {
+		if strings.Contains(rec.Body.String(), leaked) {
+			t.Errorf("response leaks %q: %s", leaked, rec.Body.String())
+		}
+	}
+	// The operator still needs the reason, so it must be in the server log.
+	if !strings.Contains(logs.String(), "database ping failed") {
+		t.Errorf("expected the failure to be logged, got %q", logs.String())
+	}
+}
+
+func TestHealthPingIsBounded(t *testing.T) {
+	p := &fakePinger{}
+
+	do(Health(p, quietLogger()), http.MethodGet, "/api/health")
+
+	if !p.hadDeadline {
+		t.Fatal("Ping got a context with no deadline: a stuck database would hang the request")
+	}
+	if remaining := time.Until(p.deadline); remaining <= 0 || remaining > pingTimeout {
+		t.Errorf("deadline is %v away, want within (0, %v]", remaining, pingTimeout)
+	}
+}
+
+func TestHealthDatabaseThatNeverAnswersReturns503(t *testing.T) {
+	// The request itself carries a short deadline so the test stays fast. The
+	// handler must honour it (it keeps the earlier of the two deadlines).
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	start := time.Now()
+	Health(&fakePinger{block: true}, quietLogger()).ServeHTTP(rec, req)
+
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("handler took %v; it must give up when the context ends", elapsed)
+	}
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", rec.Code)
 	}
 }
 

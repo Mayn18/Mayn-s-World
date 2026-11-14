@@ -7,7 +7,7 @@ The visual reference is the owner's repository: https://github.com/Mayn18/Beep-B
 Use its design philosophy (multiple themed worlds, pixel-art atmosphere, ambient effects, reusable UI skins and saved preferences) as inspiration. Do not copy its code or assets without checking their licenses.
 
 ## Current status
-Phase 1 (technical foundation). The React + TypeScript + Vite frontend and the Go (`net/http`) backend exist, with `GET /api/health` and single-origin serving. A multi-stage production Dockerfile exists. No database, Docker Compose, authentication or website features exist yet. The backend moved from Hono to Go in ADR-013. See `docs/development-roadmap.md`.
+Phase 1 (technical foundation). The React + TypeScript + Vite frontend and the Go (`net/http`) backend exist, with `GET /api/health` and single-origin serving. A multi-stage production Dockerfile and a Docker Compose stack (app + PostgreSQL 17) exist, and `GET /api/health` reports database connectivity. No tables, migrations, authentication or website features exist yet. The backend moved from Hono to Go in ADR-013. See `docs/development-roadmap.md`.
 
 ## Commands (these exist; nothing else should be assumed)
 Backend (Go):
@@ -19,7 +19,9 @@ Frontend (Node.js 26, npm):
 - `npm run typecheck`, `npm test` (Vitest), `npm run build` (writes `dist/client`, which the Go server serves).
 
 Docker:
-- `docker build -t mayn-s-world .` builds the production image; `docker run --rm -p 8080:8080 mayn-s-world` runs it on http://localhost:8080. There is no Compose file yet.
+- `docker build -t mayn-s-world .` builds the production image; `docker run --rm -p 8080:8080 mayn-s-world` runs it on http://localhost:8080 (without a database).
+- `cp .env.example .env`, then `docker compose up --build` runs the app with PostgreSQL 17. `docker compose down` keeps the data; `docker compose down -v` deletes the database volume. Logs: `docker compose logs -f`.
+- Go tests that need a real database read `TEST_DATABASE_URL` and skip themselves when it is unset (CI sets it).
 
 No linter is configured yet for either language beyond `go vet`.
 
@@ -77,7 +79,7 @@ Treat implementation as untrusted, including your own work.
 - Frontend: React + TypeScript + Vite, Tailwind CSS and custom CSS, Motion for animation.
 - Backend: Go using only the standard library `net/http`. Do not introduce Gin, Echo, Fiber or other web frameworks (ADR-013).
 - Node.js 26 LTS and npm are for frontend tooling and builds only; Node never runs the production backend. Pin toolchain versions consistently in project config and container.
-- Database (planned): standard PostgreSQL 17 accessed with `pgx`.
+- Database: standard PostgreSQL 17 accessed with `pgx` (`internal/db` owns the pool; handlers receive small interfaces such as `handlers.Pinger`). `DATABASE_URL` is a secret: never log it or include it in an error.
 - Migrations (planned): Goose SQL migrations are the source of truth; no production schema push.
 - Local development: Docker Compose.
 - Production packaging: multi-stage Dockerfile (Node build stage, Go build stage, minimal runtime image).

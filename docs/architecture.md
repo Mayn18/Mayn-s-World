@@ -1,6 +1,6 @@
 # Architecture — Mayn's World
 
-> Status: target architecture. The application skeleton exists: a React frontend and a Go backend with `GET /api/health`, served from one origin. The production Dockerfile exists. The database, Docker Compose and everything else marked "planned" below do not exist yet.
+> Status: target architecture. The application skeleton exists: a React frontend and a Go backend with `GET /api/health`, served from one origin. The production Dockerfile, the local Docker Compose stack and the PostgreSQL connection pool exist. Migrations, tables and everything else marked "planned" below do not exist yet.
 
 ## Principles
 1. Docker-first and provider-portable.
@@ -17,9 +17,9 @@
 - Backend: Go, using only the standard library `net/http` (no web framework). See ADR-013.
 - Node.js 26 LTS and npm: frontend tooling and builds only. Node never runs the production backend.
 - Testing: Vitest (frontend); Go `testing` + `httptest` (backend).
-- Database (planned): PostgreSQL 17, accessed with `pgx`.
+- Database: PostgreSQL 17, accessed with `pgx` (`pgxpool`).
 - Migrations (planned): Goose, as SQL files in `migrations/`.
-- Multi-stage Dockerfile; Docker Compose (planned).
+- Multi-stage Dockerfile; Docker Compose for local development.
 - Render Free web service + Neon Free PostgreSQL initially.
 - GitHub Actions for CI.
 - Caddy and optional MinIO for future self-hosting.
@@ -27,11 +27,11 @@
 ## Runtime topology
 Browser -> Render Docker web service -> Go server.
 The Go server serves the built React app and `/api/*` from one origin.
-Go server -> Neon PostgreSQL using `DATABASE_URL` (planned).
+Go server -> Neon PostgreSQL using `DATABASE_URL`.
 
 Local topology, current: two processes. The Go server listens on `:8080`. The Vite dev server listens on `:5173`, serves the React app with hot reload and proxies `/api/*` to Go. The browser only talks to `:5173`, so it sees one origin and no CORS configuration is needed.
 
-Local topology, planned: Browser -> app container -> PostgreSQL container on a private Compose network.
+Local topology with Docker Compose: Browser -> `localhost:8080` -> app container -> PostgreSQL container, over a private Compose network. Compose publishes only the app's port, bound to `127.0.0.1`. The app reaches the database at the hostname `db` (the service name, resolved by Compose's internal DNS) on port 5432. The database port is not published on the host.
 
 Future self-hosted topology:
 Internet -> Caddy -> app container -> PostgreSQL container.
@@ -56,13 +56,14 @@ Current:
 - `src/client`: the React app (`main.tsx`, `app/`, `api/`, `styles.css`).
 - `index.html`, `vite.config.ts`, `tsconfig.client.json`: Vite and TypeScript configuration at the repository root.
 
+- `internal/db`: opens the `pgxpool` connection pool. It is the only package that imports the driver; queries will be added here in Phase 2.
+
 Planned (adapt names as needed, but keep these responsibilities):
 
 - `src/client/world`: theme registry, scenes, ambient effects and world manager.
 - `src/client/components/pixel-ui`: reusable pixel-art UI.
 - `src/client/components/navigation`: destination interactions and map.
 - `src/client/pages`: public and admin pages.
-- `internal/db`: PostgreSQL connection pool and queries (`pgx`).
 - `migrations`: Goose SQL migrations.
 - `public`: static assets.
 
@@ -84,8 +85,14 @@ Do not put API, authentication or database logic in world-rendering modules. In 
 - A panic in a handler becomes a logged JSON 500 instead of a dropped connection.
 - Graceful shutdown: on SIGINT or SIGTERM the server stops accepting new connections and gives in-flight requests up to 10 seconds to finish.
 
-## Database and migrations (planned)
+## Database and migrations
+Implemented: the `pgxpool` connection pool (`internal/db`) and the database-aware health check. Planned (Phase 2): Goose SQL migrations in `migrations/` and the data model.
+
 Use standard PostgreSQL features through `pgx` (`pgxpool` for the connection pool). Goose SQL migrations in `migrations/` are the source of truth. Do not use automatic schema synchronization against production as a migration strategy.
+
+Pool behavior (constants in `internal/db/db.go`): at most 10 connections, none held open at minimum, connections recycled after 30 minutes and closed after 5 idle minutes, a background check every minute, and a 5 second timeout for each connection attempt. The pool is lazy: it opens no connection at startup, so the server starts even while the database is still waking up (Neon Free suspends idle databases) and the health check reports the real state. The pool is closed after the HTTP server has finished shutting down, so in-flight requests never lose their database.
+
+`DATABASE_URL` is optional until Phase 2. If it is unset the server runs without a database. If it is set but malformed, the server refuses to start with a message that never includes the URL. `Config` prints the URL as `<redacted>`.
 
 Use a connection pool with sensible limits. Neon pooled connection strings may be used for application traffic; a direct connection may be used for migration tooling if required. Keep migration behavior documented and repeatable.
 
@@ -95,9 +102,9 @@ When the Neon project is created, confirm it uses PostgreSQL 17 so local, CI and
 Implemented:
 - `PORT`: listen port, default `8080`.
 - `STATIC_DIR`: folder with the built React app, default `dist/client`.
+- `DATABASE_URL`: PostgreSQL connection URL, optional for now (required from Phase 2). Local Compose settings are `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD`, read from a Git-ignored `.env` (template: `.env.example`).
 
 Planned, at minimum:
-- `DATABASE_URL`
 - `SESSION_SECRET`
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD_HASH`
@@ -113,18 +120,20 @@ Dockerfile (implemented):
 - Multi-stage: a `node:26-alpine` stage runs `npm ci` and `npm run build`; a `golang:1.27-alpine` stage compiles the server as a static binary (`CGO_ENABLED=0`); the final stage is `gcr.io/distroless/static-debian12:nonroot` and holds only the binary and `dist/client`. Node.js and the Go toolchain are not in the final image.
 - Toolchain versions follow `.nvmrc` and `go.mod`. Base images are pinned by tag, not digest; digest pinning belongs to the Phase 9 hardening pass.
 - Reproducible install from lockfiles (`package-lock.json`, `go.mod`).
-- Lean production image; non-root runtime user (UID 65532). Distroless has no shell, so there is no `docker exec` debugging inside the image and no in-image `HEALTHCHECK` command.
+- Lean production image; non-root runtime user (UID 65532). Distroless has no shell, so there is no `docker exec` debugging inside the image and no in-image `HEALTHCHECK` command. Health is checked from outside through `GET /api/health`.
 - Listens on `0.0.0.0` and `PORT` (default 8080).
 - Health endpoint: the platform health-check path is `GET /api/health`. There is no `/health` alias; point Render (and any Compose or monitoring check) at `/api/health`. Earlier drafts of these docs said `/health`.
 - Graceful shutdown: the Go server handles `SIGTERM`; CI checks that `docker stop` exits with code 0.
 - No secrets in image; `.dockerignore` keeps `.env*` and `.git` out of the build context.
 
-Compose (planned):
-- App service.
-- PostgreSQL 17 service.
-- Named database volume.
-- Health check and app dependency on healthy DB.
-- Local-only development configuration.
+Health contract (`GET /api/health`, ADR-014): with no database configured, `200 {"status":"ok"}`; database reachable, `200 {"status":"ok","database":"ok"}`; database not answering within 2 seconds, `503 {"status":"unavailable","database":"unavailable"}`. The client only ever sees those fixed words; the underlying error goes to the server log. There is one endpoint, not separate liveness and readiness endpoints (see ADR-014 for the trade-off).
+
+Compose (`compose.yaml`, implemented, local development only):
+- `app` service: built from the production Dockerfile, published on `127.0.0.1:8080`, `DATABASE_URL` built from `.env` and pointing at host `db`, `depends_on` the database with `condition: service_healthy`, `restart: unless-stopped`.
+- `db` service: `postgres:17` (the Debian image, not Alpine, so text sorting matches Neon's glibc), configured from `.env`, no published ports.
+- Named volume `db-data` mounted at `/var/lib/postgresql/data`.
+- Database health check: `pg_isready -h 127.0.0.1`. The explicit TCP host matters because the postgres image first runs a temporary Unix-socket-only server during initialization; a socket check would report ready too early.
+- `sslmode=disable` is used only inside the private Compose network. Production against Neon must use `sslmode=require`.
 
 `docker compose down` must preserve the named database volume. `docker compose down -v` intentionally deletes it.
 
@@ -170,6 +179,9 @@ For v1, use repository-managed static assets. If uploads are added, define an ap
 - `integration`: builds the React app, starts the Go server and checks `/api/health`, JSON API 404, SPA fallback and that a missing asset is a 404.
 - `docker`: builds the production image, checks it is configured as non-root, runs the container, repeats the smoke checks against it and checks graceful shutdown.
 
-Still disabled and to be enabled phase by phase: lint and PostgreSQL migration tests. Package scripts and tools are not assumed until they exist.
+- `go` also runs a `postgres:17` service container and sets `TEST_DATABASE_URL`, so the pool is tested against a real database.
+- `compose`: starts the Compose stack and checks health, that the React app is served, that the database port is not published, that data survives a database restart and the removal and recreation of containers, that `/api/health` returns 503 while the database is stopped and recovers afterwards, and that the app stops with exit code 0.
+
+Still disabled and to be enabled phase by phase: lint and Goose migration tests. Package scripts and tools are not assumed until they exist.
 
 Pin third-party actions to reviewed immutable commit SHAs before treating the workflow as production-hardened.

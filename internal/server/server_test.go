@@ -2,6 +2,8 @@ package server
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -43,7 +45,7 @@ func assertJSON(t *testing.T, rec *httptest.ResponseRecorder, wantStatus int, wa
 }
 
 func TestRoutes(t *testing.T) {
-	h := NewHandler(site(), quietLogger())
+	h := NewHandler(site(), nil, quietLogger())
 
 	t.Run("health", func(t *testing.T) {
 		assertJSON(t, get(h, "GET", "/api/health"), 200, `{"status":"ok"}`)
@@ -70,8 +72,31 @@ func TestRoutes(t *testing.T) {
 	})
 }
 
+// stubDB is a handlers.Pinger whose answer the test chooses.
+type stubDB struct{ err error }
+
+func (s stubDB) Ping(context.Context) error { return s.err }
+
+func TestHealthRouteReportsDatabase(t *testing.T) {
+	t.Run("database up", func(t *testing.T) {
+		h := NewHandler(site(), stubDB{}, quietLogger())
+		assertJSON(t, get(h, "GET", "/api/health"), 200, `{"status":"ok","database":"ok"}`)
+	})
+	t.Run("database down is a JSON 503, for GET and HEAD", func(t *testing.T) {
+		h := NewHandler(site(), stubDB{err: errors.New("connection refused")}, quietLogger())
+		assertJSON(t, get(h, "GET", "/api/health"), 503, `{"status":"unavailable","database":"unavailable"}`)
+		if rec := get(h, "HEAD", "/api/health"); rec.Code != 503 {
+			t.Errorf("HEAD status = %d, want 503", rec.Code)
+		}
+	})
+	t.Run("POST is still a 405 when a database is configured", func(t *testing.T) {
+		h := NewHandler(site(), stubDB{}, quietLogger())
+		assertJSON(t, get(h, "POST", "/api/health"), 405, `{"error":"method_not_allowed"}`)
+	})
+}
+
 func TestFrontendServing(t *testing.T) {
-	h := NewHandler(site(), quietLogger())
+	h := NewHandler(site(), nil, quietLogger())
 
 	if rec := get(h, "GET", "/"); rec.Code != 200 || !strings.Contains(rec.Body.String(), "<title>app</title>") {
 		t.Errorf("/ : status %d body %q", rec.Code, rec.Body.String())
@@ -89,7 +114,7 @@ func TestFrontendServing(t *testing.T) {
 }
 
 func TestRouterRedirectsUncleanPaths(t *testing.T) {
-	h := NewHandler(site(), quietLogger())
+	h := NewHandler(site(), nil, quietLogger())
 	rec := get(h, "GET", "/assets/../../etc/passwd")
 	if rec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("status = %d, want 307 to the cleaned path", rec.Code)
@@ -100,7 +125,7 @@ func TestRouterRedirectsUncleanPaths(t *testing.T) {
 }
 
 func TestAPIStillWorksWithoutFrontendBuild(t *testing.T) {
-	h := NewHandler(fstest.MapFS{}, quietLogger()) // no index.html
+	h := NewHandler(fstest.MapFS{}, nil, quietLogger()) // no index.html
 
 	assertJSON(t, get(h, "GET", "/api/health"), 200, `{"status":"ok"}`)
 	if rec := get(h, "GET", "/"); rec.Code != 404 {
@@ -110,7 +135,7 @@ func TestAPIStillWorksWithoutFrontendBuild(t *testing.T) {
 
 func TestRequestLogging(t *testing.T) {
 	var buf bytes.Buffer
-	h := NewHandler(site(), slog.New(slog.NewTextHandler(&buf, nil)))
+	h := NewHandler(site(), nil, slog.New(slog.NewTextHandler(&buf, nil)))
 
 	get(h, "GET", "/api/health?token=supersecret")
 
@@ -157,7 +182,7 @@ func TestPanicAfterResponseStartedDoesNotAppendJSON(t *testing.T) {
 }
 
 func TestNewSetsTimeoutsAndAddress(t *testing.T) {
-	srv := New(config.Config{Port: 9999, StaticDir: t.TempDir()}, quietLogger())
+	srv := New(config.Config{Port: 9999, StaticDir: t.TempDir()}, nil, quietLogger())
 
 	if srv.Addr != "0.0.0.0:9999" {
 		t.Errorf("Addr = %q, want 0.0.0.0:9999", srv.Addr)
