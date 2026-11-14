@@ -15,7 +15,7 @@
 - Tailwind CSS + custom CSS.
 - Motion for selected interface animations.
 - Hono on standard Node.js.
-- Node.js 24 LTS.
+- Node.js 26 LTS.
 - PostgreSQL 17.
 - Drizzle ORM and migrations.
 - Dockerfile + Docker Compose.
@@ -76,7 +76,7 @@ Use `.env.example` with placeholder values only. Production secrets belong in Re
 ## Docker
 Dockerfile:
 - Multi-stage.
-- Node.js 24 LTS, version pinned consistently.
+- Node.js 26 LTS, version pinned consistently.
 - Reproducible install from lockfile.
 - Lean production image.
 - Non-root runtime user.

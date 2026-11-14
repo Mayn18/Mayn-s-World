@@ -10,7 +10,7 @@ Phase 1, in progress. The repository contains documentation, GitHub templates an
 
 ## Running it locally
 
-Requires Node.js 24 (see `.nvmrc`).
+Requires Node.js 26 (see `.nvmrc`).
 
 ```bash
 npm install
@@ -23,7 +23,7 @@ Other commands: `npm run typecheck`, `npm test`, `npm run build`, and `npm start
 ## Planned technology
 
 - Frontend: React, TypeScript, Vite, Tailwind CSS, Motion
-- Backend: Hono on Node.js 24 LTS
+- Backend: Hono on Node.js 26 LTS
 - Database: PostgreSQL 17 with Drizzle ORM
 - Packaging: multi-stage Docker image; Docker Compose for local development
 - Initial hosting: Render Free and Neon Free, with a path to self-hosting on Linux

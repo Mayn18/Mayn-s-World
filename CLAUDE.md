@@ -68,7 +68,7 @@ Treat implementation as untrusted, including your own work.
 ## Architecture invariants
 - Frontend: React + TypeScript + Vite, Tailwind CSS and custom CSS, Motion for animation.
 - Backend: Hono running on standard Node.js.
-- Runtime target: Node.js 24 LTS, pinned consistently in project config and container.
+- Runtime target: Node.js 26 LTS, pinned consistently in project config and container.
 - Database: standard PostgreSQL 17.
 - ORM/migrations: Drizzle ORM. Migrations are the source of truth; no production schema push.
 - Local development: Docker Compose.
