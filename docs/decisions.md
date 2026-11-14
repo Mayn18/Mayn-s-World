@@ -119,7 +119,7 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 - Frontend serving: a request for an existing file returns the file. A path with a file extension that does not exist returns a plain 404, never `index.html`, so a missing script cannot come back as HTML. Any other path returns `index.html` for client-side routing.
 - Development: Go on port 8080 and Vite on 5173 run as separate processes. Vite proxies `/api` to `http://127.0.0.1:8080` (IPv4 explicitly: Node may resolve `localhost` to `::1`, but the server listens on IPv4).
 - The `/api/health` response type is declared twice, as a Go struct and as a TypeScript type with a runtime guard in `src/client/api/health.ts`. `src/shared` was removed because it only existed to share TypeScript between two TypeScript programs. Tests on both sides pin the JSON.
-- `go.mod` declares `go 1.24`, the minimum language version the code needs and the version it was verified with. CI runs Go 1.26. Go 1.24 itself is past upstream support, so raise the `go` directive when the toolchain is updated.
+- `go.mod` declares `go 1.27`, matching the current supported Go toolchain used in CI. Keep the module directive and CI toolchain aligned, and revisit them when a newer supported release becomes the project baseline.
 
 **Trade-offs accepted:**
 - Two languages in one repository, and the Go toolchain is a new local and CI requirement.
