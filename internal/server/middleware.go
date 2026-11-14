@@ -13,11 +13,25 @@ import (
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
+	wroteHeader bool
 }
 
 func (r *statusRecorder) WriteHeader(status int) {
+	if r.wroteHeader {
+		return
+	}
 	r.status = status
+	r.wroteHeader = true
 	r.ResponseWriter.WriteHeader(status)
+}
+
+// Write records the implicit 200 response when a handler writes without
+// explicitly calling WriteHeader first.
+func (r *statusRecorder) Write(p []byte) (int, error) {
+	if !r.wroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
+	return r.ResponseWriter.Write(p)
 }
 
 // Unwrap lets net/http reach the real writer for features such as flushing.
@@ -56,8 +70,13 @@ func recoverPanics(logger *slog.Logger, next http.Handler) http.Handler {
 				panic(rec) // deliberate abort signal from net/http; pass it on
 			}
 			logger.Error("panic in handler", "method", r.Method, "path", r.URL.Path, "panic", rec)
-			handlers.WriteError(w, http.StatusInternalServerError, "internal_error")
+			// Once headers or body bytes have been sent, the response cannot be
+			// replaced with a JSON error. Avoid appending a second response.
+			if !tracked.wroteHeader {
+				handlers.WriteError(tracked, http.StatusInternalServerError, "internal_error")
+			}
 		}()
-		next.ServeHTTP(w, r)
+		tracked := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(tracked, r)
 	})
 }
