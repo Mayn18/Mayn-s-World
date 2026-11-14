@@ -1,6 +1,6 @@
 # Architecture — Mayn's World
 
-> Status: target architecture. The application skeleton exists: a React frontend and a Go backend with `GET /api/health`, served from one origin. The database, Docker and everything else marked "planned" below do not exist yet.
+> Status: target architecture. The application skeleton exists: a React frontend and a Go backend with `GET /api/health`, served from one origin. The production Dockerfile exists. The database, Docker Compose and everything else marked "planned" below do not exist yet.
 
 ## Principles
 1. Docker-first and provider-portable.
@@ -19,7 +19,7 @@
 - Testing: Vitest (frontend); Go `testing` + `httptest` (backend).
 - Database (planned): PostgreSQL 17, accessed with `pgx`.
 - Migrations (planned): Goose, as SQL files in `migrations/`.
-- Dockerfile + Docker Compose (planned).
+- Multi-stage Dockerfile; Docker Compose (planned).
 - Render Free web service + Neon Free PostgreSQL initially.
 - GitHub Actions for CI.
 - Caddy and optional MinIO for future self-hosting.
@@ -108,18 +108,18 @@ Optional, planned:
 
 Use `.env.example` with placeholder values only. Production secrets belong in Render environment settings. Never bake secrets into an image.
 
-## Docker (planned)
-Dockerfile:
-- Multi-stage: a Node.js 26 LTS stage runs `npm ci` and `npm run build`; a Go stage compiles the server (static binary); the final stage holds only the binary and `dist/client`. Node.js is not in the final image.
-- Toolchain versions pinned consistently.
+## Docker
+Dockerfile (implemented):
+- Multi-stage: a `node:26-alpine` stage runs `npm ci` and `npm run build`; a `golang:1.27-alpine` stage compiles the server as a static binary (`CGO_ENABLED=0`); the final stage is `gcr.io/distroless/static-debian12:nonroot` and holds only the binary and `dist/client`. Node.js and the Go toolchain are not in the final image.
+- Toolchain versions follow `.nvmrc` and `go.mod`. Base images are pinned by tag, not digest; digest pinning belongs to the Phase 9 hardening pass.
 - Reproducible install from lockfiles (`package-lock.json`, `go.mod`).
-- Lean production image, non-root runtime user.
-- Listen on `0.0.0.0` and `PORT`.
-- Health endpoint. The implemented endpoint is `GET /api/health`; docs and the Render health check previously said `/health`. Decide the platform health-check path in the Docker task (for example, point Render at `/api/health`, or add a root alias).
-- Graceful shutdown (already implemented in the Go server).
-- No secrets in image.
+- Lean production image; non-root runtime user (UID 65532). Distroless has no shell, so there is no `docker exec` debugging inside the image and no in-image `HEALTHCHECK` command.
+- Listens on `0.0.0.0` and `PORT` (default 8080).
+- Health endpoint: the platform health-check path is `GET /api/health`. There is no `/health` alias; point Render (and any Compose or monitoring check) at `/api/health`. Earlier drafts of these docs said `/health`.
+- Graceful shutdown: the Go server handles `SIGTERM`; CI checks that `docker stop` exits with code 0.
+- No secrets in image; `.dockerignore` keeps `.env*` and `.git` out of the build context.
 
-Compose:
+Compose (planned):
 - App service.
 - PostgreSQL 17 service.
 - Named database volume.
@@ -168,7 +168,8 @@ For v1, use repository-managed static assets. If uploads are added, define an ap
 - `frontend`: `npm ci`, typecheck, Vitest, `vite build` on Node.js 26.
 - `go`: `gofmt` check, `go vet`, `go test -race`, `go build`.
 - `integration`: builds the React app, starts the Go server and checks `/api/health`, JSON API 404, SPA fallback and that a missing asset is a 404.
+- `docker`: builds the production image, checks it is configured as non-root, runs the container, repeats the smoke checks against it and checks graceful shutdown.
 
-Still disabled and to be enabled phase by phase: lint, PostgreSQL migration tests, Docker build. Package scripts and tools are not assumed until they exist.
+Still disabled and to be enabled phase by phase: lint and PostgreSQL migration tests. Package scripts and tools are not assumed until they exist.
 
 Pin third-party actions to reviewed immutable commit SHAs before treating the workflow as production-hardened.

@@ -1,0 +1,25 @@
+# Keeps the Docker build context small and keeps secrets out of the image.
+# Anything listed here is invisible to `COPY` in the Dockerfile.
+
+# Version control and CI metadata
+.git
+.github
+
+# Dependencies and build output are recreated inside the image
+node_modules
+dist
+bin
+coverage
+
+# Local secrets and logs: never send these to the build
+.env
+.env.*
+!.env.example
+*.log
+
+# Documentation is not needed to build or run the app
+docs
+*.md
+
+# Editor and OS noise
+.DS_Store

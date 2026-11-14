@@ -7,7 +7,7 @@ The visual reference is the owner's repository: https://github.com/Mayn18/Beep-B
 Use its design philosophy (multiple themed worlds, pixel-art atmosphere, ambient effects, reusable UI skins and saved preferences) as inspiration. Do not copy its code or assets without checking their licenses.
 
 ## Current status
-Phase 1 (technical foundation). The React + TypeScript + Vite frontend and the Go (`net/http`) backend exist, with `GET /api/health` and single-origin serving. No database, Docker, authentication or website features exist yet. The backend moved from Hono to Go in ADR-013. See `docs/development-roadmap.md`.
+Phase 1 (technical foundation). The React + TypeScript + Vite frontend and the Go (`net/http`) backend exist, with `GET /api/health` and single-origin serving. A multi-stage production Dockerfile exists. No database, Docker Compose, authentication or website features exist yet. The backend moved from Hono to Go in ADR-013. See `docs/development-roadmap.md`.
 
 ## Commands (these exist; nothing else should be assumed)
 Backend (Go):
@@ -17,6 +17,9 @@ Backend (Go):
 Frontend (Node.js 26, npm):
 - `npm run dev:client` starts Vite on port 5173 and proxies `/api` to Go on port 8080. Run it alongside the Go server.
 - `npm run typecheck`, `npm test` (Vitest), `npm run build` (writes `dist/client`, which the Go server serves).
+
+Docker:
+- `docker build -t mayn-s-world .` builds the production image; `docker run --rm -p 8080:8080 mayn-s-world` runs it on http://localhost:8080. There is no Compose file yet.
 
 No linter is configured yet for either language beyond `go vet`.
 
