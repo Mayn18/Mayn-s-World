@@ -80,6 +80,22 @@ jobs:
   go:
     name: Backend - format, vet, test, build
     runs-on: ubuntu-latest
+    # A throwaway PostgreSQL for the tests that need a real database
+    # (TestRealDatabase in internal/db). Without TEST_DATABASE_URL those tests
+    # skip themselves, so local `go test ./...` still works with no database.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: mayn_test
+          POSTGRES_USER: mayn_test
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U mayn_test -d mayn_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://mayn_test:ci-only-not-a-secret@127.0.0.1:5432/mayn_test?sslmode=disable
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
@@ -191,20 +207,95 @@ jobs:
           test "$(docker inspect --format '{{.State.ExitCode}}' app)" = 0
           echo "Container smoke test passed"
 
+  compose:
+    name: Compose - app + PostgreSQL, health and persistence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Create .env from the example with a generated password
+        shell: bash
+        run: |
+          cp .env.example .env
+          # hex only, so it is safe inside the DATABASE_URL that Compose builds.
+          sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 16)/" .env
+
+      - name: Validate the Compose file
+        run: docker compose config --quiet
+
+      - name: Start the stack
+        run: docker compose up --build -d
+
+      - name: Run the checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Always show logs and clean up, pass or fail. -v also deletes the
+          # volume, which only ever holds CI test data.
+          trap 'docker compose logs --no-color; docker compose down -v' EXIT
+
+          base=http://127.0.0.1:8080
+          sql() { docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -c "$1"' _ "$1"; }
+          # Retries until the expected body appears (the app needs a moment to
+          # start, and its pool needs a moment to reconnect after a DB restart).
+          wait_for_health() {
+            for _ in $(seq 1 40); do
+              [ "$(curl -s "$base/api/health" || true)" = "$1" ] && return 0
+              sleep 1
+            done
+            echo "::error::/api/health never returned: $1"; curl -si "$base/api/health" || true; return 1
+          }
+
+          echo "1. app and database healthy"
+          wait_for_health '{"status":"ok","database":"ok"}'
+
+          echo "2. React app is served by the same container"
+          [[ "$(curl -s $base/)" == *'id="root"'* ]]
+
+          echo "3. database is not published on the host"
+          ! (exec 3<>/dev/tcp/127.0.0.1/5432) 2>/dev/null
+
+          echo "4. data survives a restart of the database service"
+          sql "CREATE TABLE ci_persistence (note text); INSERT INTO ci_persistence VALUES ('still here');"
+          docker compose restart db
+          for _ in $(seq 1 30); do
+            [ "$(sql 'SELECT note FROM ci_persistence' 2>/dev/null || true)" = "still here" ] && break
+            sleep 1
+          done
+          test "$(sql 'SELECT note FROM ci_persistence')" = "still here"
+
+          echo "5. data survives removing and recreating the containers (volume kept)"
+          docker compose down
+          docker compose up -d
+          for _ in $(seq 1 30); do
+            [ "$(sql 'SELECT note FROM ci_persistence' 2>/dev/null || true)" = "still here" ] && break
+            sleep 1
+          done
+          test "$(sql 'SELECT note FROM ci_persistence')" = "still here"
+
+          echo "6. health reports 503 without leaking details while the database is stopped"
+          wait_for_health '{"status":"ok","database":"ok"}'
+          docker compose stop db
+          status="$(curl -s -o /tmp/body -w '%{http_code}' "$base/api/health")"
+          test "$status" = 503
+          test "$(cat /tmp/body)" = '{"status":"unavailable","database":"unavailable"}'
+
+          echo "7. app recovers by itself when the database comes back"
+          docker compose start db
+          wait_for_health '{"status":"ok","database":"ok"}'
+
+          echo "8. app stops cleanly: docker stop exits 0 (graceful shutdown, pool closed)"
+          docker compose stop -t 15 app
+          test "$(docker inspect --format '{{.State.ExitCode}}' "$(docker compose ps -a -q app)")" = 0
+
+          echo "Compose checks passed"
+
   # ---------------------------------------------------------------------------
   # Still DISABLED. Uncomment each job only when the files it needs exist.
   #
   # Lint is not configured yet (no linter chosen); add an `npm run lint` step
   # to the `frontend` job (and golangci-lint to `go`) when chosen.
   #
-  # Phase 2: add a postgres:17 service to the `go` job and migration tests, e.g.
-  #   services:
-  #     postgres:
-  #       image: postgres:17
-  #       env:
-  #         POSTGRES_PASSWORD: postgres
-  #       ports: ["5432:5432"]
-  #       options: >-
-  #         --health-cmd "pg_isready -U postgres"
-  #         --health-interval 5s --health-timeout 5s --health-retries 10
+  # Phase 2: add Goose migration tests to the `go` job, which already has a
+  # postgres:17 service and TEST_DATABASE_URL.
   # ---------------------------------------------------------------------------

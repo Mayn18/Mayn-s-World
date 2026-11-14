@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/Mayn18/mayn-s-world/internal/config"
+	"github.com/Mayn18/mayn-s-world/internal/db"
+	"github.com/Mayn18/mayn-s-world/internal/handlers"
 	"github.com/Mayn18/mayn-s-world/internal/server"
 )
 
@@ -36,7 +38,29 @@ func run() error {
 		return err
 	}
 
-	srv := server.New(cfg, logger)
+	// database stays a nil interface when no database is configured, which is
+	// how handlers.Health knows to skip the ping. It is declared with the
+	// interface type on purpose: assigning a nil *pgxpool.Pool to it would
+	// produce a NON-nil interface holding a nil pointer, and the health check
+	// would then call Ping on nil.
+	var database handlers.Pinger
+	if cfg.DatabaseURL != "" {
+		pool, err := db.NewPool(context.Background(), cfg.DatabaseURL)
+		if err != nil {
+			return err
+		}
+		// Deferred here, so it runs when run() returns: after srv.Shutdown below
+		// has let in-flight requests finish. Closing the pool first would make
+		// those requests fail. Log lines never include the URL (it holds the
+		// password).
+		defer pool.Close()
+		database = pool
+		logger.Info("database configured; the pool connects on first use")
+	} else {
+		logger.Info("DATABASE_URL not set; running without a database")
+	}
+
+	srv := server.New(cfg, database, logger)
 
 	// ctx is cancelled when the process receives Ctrl+C (SIGINT) or SIGTERM,
 	// which is what Docker and hosting platforms send to ask a program to stop.

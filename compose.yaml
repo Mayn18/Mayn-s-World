@@ -1,0 +1,69 @@
+# Local development stack: the app (built from the production Dockerfile) and
+# PostgreSQL 17.
+#
+#   cp .env.example .env     # once; then edit the password
+#   docker compose up --build
+#
+# Open http://localhost:8080. See README.md for stopping, logs and resetting.
+#
+# Values come from .env (never committed). The `:?` form makes Compose refuse
+# to start with a clear message when a required value is missing, rather than
+# starting a database with an empty password.
+
+name: mayns-world
+
+services:
+  db:
+    # The Debian-based image, not -alpine: Alpine uses musl, which sorts text
+    # differently from the glibc that Neon and most Linux hosts use. Matching
+    # collation keeps a dump from one environment restorable in another.
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      # A named volume, managed by Docker. It outlives the container, so
+      # `docker compose down` keeps the data; only `down -v` deletes it.
+      - db-data:/var/lib/postgresql/data
+    # No `ports:` on purpose. Only containers on this Compose network (the app)
+    # can reach the database, so it is not exposed on the host or your network.
+    # To use psql from your machine, run:
+    #   docker compose exec db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+    healthcheck:
+      # -h 127.0.0.1 forces a TCP check. On first start the image runs a
+      # temporary server that listens on a Unix socket only, then restarts as
+      # the real server on TCP. A socket-only check passes during that
+      # temporary phase, and the app could connect too early and fail.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  app:
+    # Reuses the production Dockerfile (distroless, non-root). Nothing is
+    # added to that image for development.
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        # Wait for the health check to pass, not merely for the container to
+        # have started.
+        condition: service_healthy
+    ports:
+      # Bound to localhost only, so the dev app is not exposed to your network.
+      - "127.0.0.1:8080:8080"
+    environment:
+      PORT: "8080"
+      # `db` is the service name; Compose's internal DNS resolves it to the
+      # database container. sslmode=disable is acceptable only because this
+      # traffic never leaves the private Compose network; production (Neon)
+      # must use sslmode=require.
+      # The password goes in the URL, so it must not contain URL-special
+      # characters (@ : / ? # %); see .env.example.
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+
+volumes:
+  db-data:

@@ -127,3 +127,27 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 - A little more boilerplate for JSON decoding and validation than a TypeScript framework with a schema library.
 - No Go hot reload is configured. Restart `go run` after backend changes; a watcher can be added later if it becomes annoying.
 - The migration from Hono costs one milestone of work that adds no new user-visible feature.
+
+## ADR-014 — Local PostgreSQL with Compose, and the database-aware health contract
+**Status:** Accepted.
+
+**Decision:** local development runs the app and PostgreSQL 17 with Docker Compose. The Go server opens a lazy `pgxpool` connection pool when `DATABASE_URL` is set, and `GET /api/health` reports database connectivity.
+
+**Health contract:**
+- No database configured: `200 {"status":"ok"}` (unchanged from ADR-013).
+- Database answers a ping within 2 seconds: `200 {"status":"ok","database":"ok"}`.
+- Otherwise: `503 {"status":"unavailable","database":"unavailable"}`.
+- Clients see only those fixed words. The real error is logged on the server, because driver errors can contain host names and other internals.
+
+**Choices and reasons:**
+- **One endpoint, not liveness plus readiness.** Nothing yet needs to tell "process is alive" apart from "can serve traffic", and a second endpoint is more surface to test and keep consistent. Trade-off: a platform that restarts the service on a failed health check could restart the app during a short Neon outage or wake-up, when a restart would not help. This is accepted for now and must be revisited in Phase 8 (Render deployment); the fix is a separate liveness path for the platform check, leaving `/api/health` as the readiness view.
+- **`DATABASE_URL` is optional until Phase 2.** Frontend-only development, the integration job and the Docker smoke job keep working with no database. It becomes required when the first feature needs the database. A malformed value stops the server at startup, with an error that never includes the URL.
+- **Lazy pool.** The pool opens no connection at startup. The server therefore starts while the database is still waking up (Neon Free suspends idle databases) and reports the truth through the health check, instead of crash-looping.
+- **`postgres:17` (Debian), not Alpine.** Alpine's musl sorts text differently from the glibc used by Neon and most Linux hosts, which would weaken the goal of restoring a dump in any environment.
+- **`pg_isready -h 127.0.0.1`.** The official image runs a temporary Unix-socket-only server while initializing a new volume; a socket check would pass too early.
+- **No health check inside the app image.** The distroless image has no shell or tools. The Compose database check uses the database image; the app is checked from outside through its HTTP endpoint.
+- **The database port is not published.** Only the app container can reach PostgreSQL. A SQL shell is available with `docker compose exec db psql`.
+- **`sslmode=disable` only inside Compose.** The traffic never leaves the private network. Production against Neon uses `sslmode=require`.
+- **Goose migrations are not part of this change.** No tables exist yet. Migrations arrive with the Phase 2 data model.
+
+**Trade-offs accepted:** the Compose password is placed in a URL, so it must avoid URL-special characters (documented in `.env.example`); `Config` hides the URL in formatted output, which costs a small `String` method.

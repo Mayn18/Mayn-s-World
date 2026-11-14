@@ -17,6 +17,23 @@ describe('fetchHealth', () => {
     });
   });
 
+  it('accepts the body the server sends when a database is connected', async () => {
+    await expect(
+      fetchHealth(fakeFetch({ status: 'ok', database: 'ok' })),
+    ).resolves.toEqual({ status: 'ok', database: 'ok' });
+  });
+
+  it('rejects the 503 the server sends when the database is down', async () => {
+    const down = { status: 'unavailable', database: 'unavailable' };
+    await expect(fetchHealth(fakeFetch(down, 503))).rejects.toThrow('HTTP 503');
+  });
+
+  it('rejects an ok status that carries an unexpected database value', async () => {
+    await expect(
+      fetchHealth(fakeFetch({ status: 'ok', database: 'unavailable' })),
+    ).rejects.toThrow('unexpected response shape');
+  });
+
   it('rejects when the server returns an error status', async () => {
     await expect(fetchHealth(fakeFetch({ error: 'boom' }, 500))).rejects.toThrow(
       'HTTP 500',

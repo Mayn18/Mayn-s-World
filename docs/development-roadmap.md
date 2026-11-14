@@ -18,12 +18,14 @@ Done:
 - CI: frontend checks, Go checks and an integration smoke test.
 - Multi-stage Dockerfile (Node build stage, Go build stage, distroless non-root runtime) and a CI job that builds it, runs the container and smoke-tests it.
 
+- Docker Compose for local development: app plus PostgreSQL 17, named volume, `pg_isready` health check, app waits for a healthy database (ADR-014).
+- `pgx` connection pool (`internal/db`), optional `DATABASE_URL`, and a database-aware `GET /api/health` (200 or 503).
+- CI: PostgreSQL service for the Go tests, and a Compose job covering health, persistence and recovery.
+
 Remaining:
-- Docker Compose for local development, with a PostgreSQL 17 service and a named volume.
-- Database-aware health check, using `pgx`.
 - Linter and formatter choices for the frontend; `golangci-lint` for Go if wanted.
 
-Acceptance: clean local Docker startup and production image startup.
+Acceptance: clean local Docker startup and production image startup. Phase 1 is not complete until the linter and formatter decision is made and the owner has run the Compose stack locally.
 
 ## Phase 2 — Data foundation
 - Goose SQL migrations and the `pgx` connection pool.

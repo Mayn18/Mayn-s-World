@@ -31,10 +31,9 @@ RUN npm run build
 FROM golang:1.27-alpine AS build
 WORKDIR /src
 
-# Same caching idea: module files first. The server has no third-party
-# dependencies yet, so `go mod download` does nothing today; it starts paying
-# off when pgx is added. `go.sum*` matches nothing until then, which is fine
-# because go.mod always matches.
+# Same caching idea: module files first, so `go mod download` (which fetches
+# pgx and its dependencies) is skipped on later builds unless go.mod or go.sum
+# changed. The glob keeps the build working if go.sum is ever absent.
 COPY go.mod go.sum* ./
 RUN go mod download
 

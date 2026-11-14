@@ -14,11 +14,12 @@ import (
 )
 
 // New returns a configured server. The caller starts it with ListenAndServe and
-// stops it with Shutdown (see cmd/server/main.go).
-func New(cfg config.Config, logger *slog.Logger) *http.Server {
+// stops it with Shutdown (see cmd/server/main.go). db is the database the health
+// check pings; pass a nil interface when no database is configured.
+func New(cfg config.Config, db handlers.Pinger, logger *slog.Logger) *http.Server {
 	return &http.Server{
 		Addr:    cfg.Addr(),
-		Handler: NewHandler(os.DirFS(cfg.StaticDir), logger),
+		Handler: NewHandler(os.DirFS(cfg.StaticDir), db, logger),
 
 		// Without timeouts a slow or stalled client can hold a connection
 		// open forever. These are generous for a small site.
@@ -33,8 +34,9 @@ func New(cfg config.Config, logger *slog.Logger) *http.Server {
 }
 
 // NewHandler builds the router. It takes the static files as an fs.FS rather
-// than a directory path so tests can use an in-memory filesystem.
-func NewHandler(static fs.FS, logger *slog.Logger) http.Handler {
+// than a directory path so tests can use an in-memory filesystem; likewise the
+// database arrives as a handlers.Pinger so tests can use a fake.
+func NewHandler(static fs.FS, db handlers.Pinger, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
 	// Go 1.22+ patterns may start with a method. "GET /api/health" also matches
@@ -42,7 +44,7 @@ func NewHandler(static fs.FS, logger *slog.Logger) http.Handler {
 	//   GET  /api/health -> Health
 	//   POST /api/health -> 405 (the method-less pattern below)
 	//   /api/anything    -> JSON 404 (the "/api/" subtree pattern)
-	mux.HandleFunc("GET /api/health", handlers.Health)
+	mux.HandleFunc("GET /api/health", handlers.Health(db, logger))
 	mux.HandleFunc("/api/health", handlers.MethodNotAllowed("GET, HEAD"))
 	mux.HandleFunc("/api", handlers.APINotFound)
 	mux.HandleFunc("/api/", handlers.APINotFound)
