@@ -3,7 +3,7 @@
 Each record states the decision, the reason and the main trade-off accepted.
 
 ## ADR-001 — Render + Neon initially, self-hostable later
-**Status:** Accepted
+**Status:** Accepted. Backend wording amended by ADR-013: read "standard Node.js" as "standard Go".
 
 Use Render Free for the Dockerized application and Neon Free for managed PostgreSQL. Keep the application provider-neutral and use standard Node.js and PostgreSQL. Future self-hosting uses Linux, Docker Compose, PostgreSQL, Caddy and optional MinIO.
 
@@ -19,14 +19,14 @@ Use a multi-stage Dockerfile for the production app and Docker Compose for local
 Trade-off: adds Docker as a required local tool in exchange for identical behavior across environments.
 
 ## ADR-003 — One application service for v1
-**Status:** Accepted
+**Status:** Accepted. Still in force; the Go server (ADR-013) now plays the role this record gives to Hono.
 
 Hono serves the built React app and `/api/*` from one origin. Avoid separate frontend/backend deployments initially to reduce operational complexity and CORS configuration.
 
 Trade-off: frontend and backend deploy together and cannot scale independently. Irrelevant at this scale.
 
 ## ADR-004 — PostgreSQL is the durable data store
-**Status:** Accepted
+**Status:** Accepted. Migration tooling amended by ADR-013: Goose SQL migrations replace Drizzle migrations.
 
 Use PostgreSQL 17 and Drizzle migrations. Do not rely on Render filesystem persistence. Use a future S3-compatible abstraction for uploads if required.
 
@@ -84,7 +84,7 @@ Reason: a green check must not imply that code was tested when no code exists.
 Trade-off: CI coverage grows gradually and requires deliberate enabling.
 
 ## ADR-012 — Task 001 tooling: npm, Vitest, one root package, Tailwind v4
-**Status:** Accepted
+**Status:** Accepted for the frontend. Partly superseded by ADR-013: the Node server pieces (Hono, `tsx`, the server and build tsconfigs, `src/shared`, `npm start`) no longer exist. npm, Vitest, Tailwind v4, the client tsconfig and the Vite dev proxy remain.
 
 - **npm** is the package manager. It ships with Node, so there is nothing extra to install or explain. The committed `package-lock.json` is the source of truth for versions, and CI installs with `npm ci`.
 - **One root `package.json`**, not a workspace monorepo. Client, server and shared code live under `src/` as in `docs/architecture.md`. Workspaces can be added later if there is a concrete need.
@@ -97,3 +97,33 @@ Trade-off: CI coverage grows gradually and requires deliberate enabling.
 - **Linting is deferred.** No linter or formatter is configured yet.
 
 Trade-off: no linter means style and some bug classes are unchecked for now; the three-tsconfig layout is more files in exchange for stricter, clearer boundaries.
+
+## ADR-013 — Replace Hono on Node.js with Go (`net/http`) as the backend
+**Status:** Accepted. Supersedes the backend technology in ADR-001, ADR-003, ADR-004 and ADR-012 (see their status lines).
+
+**Decision (made by the owner):** the backend is written in Go using only the standard library (`net/http`). No Gin, Echo, Fiber or other web framework. The frontend stays React + TypeScript + Vite. Node.js and npm remain necessary to build the frontend, but Node does not run the production backend. When the database arrives (a later milestone, not part of this change), PostgreSQL 17 is accessed with `pgx` and schema changes are SQL migrations managed by Goose, replacing Drizzle.
+
+**Reasons** (drafted to record the thinking; the owner should edit them to match their own):
+- One compiled binary serves the API and the built React app. A production image needs no Node.js runtime, so it can be small and simple.
+- The standard library is enough for this API. Since Go 1.22, `http.ServeMux` matches methods and path patterns, so no router dependency is needed. The Go backend has no third-party dependencies at all, and `hono`, `@hono/node-server` and `tsx` left the npm dependency tree.
+- Plain, explicit code suits the owner's goal of understanding and maintaining the whole application.
+- HTTP server timeouts, graceful shutdown and typed errors are first-class and easy to read in Go.
+- `pgx` is a mature PostgreSQL driver, and Goose keeps migrations as reviewable SQL files, which matches the "migrations are the source of truth" rule.
+
+**What did not change:** one origin (`/api/*` and the React app from the same server), the `GET /api/health` contract `{"status":"ok"}`, the Vite dev proxy approach, the product requirements, the pixel-art direction, the six themes, the admin scope and the Render + Neon deployment goal.
+
+**Implementation choices:**
+- Layout: `cmd/server` (entry point and shutdown), `internal/config` (environment), `internal/handlers` (handlers, JSON helpers, SPA serving), `internal/server` (routes, middleware, `http.Server` settings). No other packages until needed.
+- Configuration: `PORT` (default 8080) and `STATIC_DIR` (default `dist/client`). The server always binds `0.0.0.0`.
+- Errors under `/api` are JSON: `{"error":"not_found"}` (404) and `{"error":"method_not_allowed"}` (405, with an `Allow` header).
+- Frontend serving: a request for an existing file returns the file. A path with a file extension that does not exist returns a plain 404, never `index.html`, so a missing script cannot come back as HTML. Any other path returns `index.html` for client-side routing.
+- Development: Go on port 8080 and Vite on 5173 run as separate processes. Vite proxies `/api` to `http://127.0.0.1:8080` (IPv4 explicitly: Node may resolve `localhost` to `::1`, but the server listens on IPv4).
+- The `/api/health` response type is declared twice, as a Go struct and as a TypeScript type with a runtime guard in `src/client/api/health.ts`. `src/shared` was removed because it only existed to share TypeScript between two TypeScript programs. Tests on both sides pin the JSON.
+- `go.mod` declares `go 1.24`, the minimum language version the code needs and the version it was verified with. CI runs Go 1.26. Go 1.24 itself is past upstream support, so raise the `go` directive when the toolchain is updated.
+
+**Trade-offs accepted:**
+- Two languages in one repository, and the Go toolchain is a new local and CI requirement.
+- API types are duplicated across Go and TypeScript instead of shared. Tests catch drift; generating types from a schema can be considered once the API grows.
+- A little more boilerplate for JSON decoding and validation than a TypeScript framework with a schema library.
+- No Go hot reload is configured. Restart `go run` after backend changes; a watcher can be added later if it becomes annoying.
+- The migration from Hono costs one milestone of work that adds no new user-visible feature.

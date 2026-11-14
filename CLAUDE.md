@@ -7,13 +7,18 @@ The visual reference is the owner's repository: https://github.com/Mayn18/Beep-B
 Use its design philosophy (multiple themed worlds, pixel-art atmosphere, ambient effects, reusable UI skins and saved preferences) as inspiration. Do not copy its code or assets without checking their licenses.
 
 ## Current status
-Phase 1 (technical foundation), Task 001 in progress: application skeleton and `GET /api/health`. No database, Docker, authentication or website features exist yet. See `docs/development-roadmap.md`.
+Phase 1 (technical foundation). The React + TypeScript + Vite frontend and the Go (`net/http`) backend exist, with `GET /api/health` and single-origin serving. No database, Docker, authentication or website features exist yet. The backend moved from Hono to Go in ADR-013. See `docs/development-roadmap.md`.
 
 ## Commands (these exist; nothing else should be assumed)
-- `npm run dev:server` starts Hono on port 3000 (override with `PORT`).
-- `npm run dev:client` starts Vite on port 5173 and proxies `/api` to Hono. Run both for development.
-- `npm run typecheck`, `npm test` (Vitest), `npm run build`, `npm start` (serves the build on one origin).
-- No linter or formatter is configured yet.
+Backend (Go):
+- `go run ./cmd/server` starts the server on port 8080 (`PORT`, `STATIC_DIR` override defaults).
+- `go test ./...`, `go vet ./...`, `gofmt -l .` (must print nothing), `go build ./...`.
+
+Frontend (Node.js 26, npm):
+- `npm run dev:client` starts Vite on port 5173 and proxies `/api` to Go on port 8080. Run it alongside the Go server.
+- `npm run typecheck`, `npm test` (Vitest), `npm run build` (writes `dist/client`, which the Go server serves).
+
+No linter is configured yet for either language beyond `go vet`.
 
 ## Mandatory documents
 Before making changes, read:
@@ -67,16 +72,16 @@ Treat implementation as untrusted, including your own work.
 
 ## Architecture invariants
 - Frontend: React + TypeScript + Vite, Tailwind CSS and custom CSS, Motion for animation.
-- Backend: Hono running on standard Node.js.
-- Runtime target: Node.js 26 LTS, pinned consistently in project config and container.
-- Database: standard PostgreSQL 17.
-- ORM/migrations: Drizzle ORM. Migrations are the source of truth; no production schema push.
+- Backend: Go using only the standard library `net/http`. Do not introduce Gin, Echo, Fiber or other web frameworks (ADR-013).
+- Node.js 26 LTS and npm are for frontend tooling and builds only; Node never runs the production backend. Pin toolchain versions consistently in project config and container.
+- Database (planned): standard PostgreSQL 17 accessed with `pgx`.
+- Migrations (planned): Goose SQL migrations are the source of truth; no production schema push.
 - Local development: Docker Compose.
-- Production packaging: multi-stage Dockerfile.
+- Production packaging: multi-stage Dockerfile (Node build stage, Go build stage, minimal runtime image).
 - Initial hosting: Render Free web service + Neon Free PostgreSQL.
 - Future hosting: Linux + Docker Compose, PostgreSQL, Caddy, optional MinIO.
-- One application service: Hono serves the built React app and `/api/*` from the same origin.
-- Use standard Node.js APIs and PostgreSQL. Do not introduce Cloudflare Workers, D1, Render-specific application APIs, proprietary runtime dependencies or provider-specific database features.
+- One application service: the Go server serves the built React app and `/api/*` from the same origin.
+- Use standard Go APIs and PostgreSQL. Do not introduce Cloudflare Workers, D1, Render-specific application APIs, proprietary runtime dependencies or provider-specific database features.
 - All durable data belongs in PostgreSQL or a future S3-compatible object store, never the Render container filesystem.
 - Use environment variables for deployment configuration and secrets. Never commit secrets.
 - Keep world-rendering code free of API, authentication and database logic.
@@ -94,12 +99,13 @@ Treat implementation as untrusted, including your own work.
 
 ## Coding conventions
 - Prefer understandable code over unnecessary abstractions. Add an abstraction only when there is a concrete second use.
-- TypeScript throughout; avoid `any` and explain any exception in a comment.
+- TypeScript throughout the frontend; avoid `any` and explain any exception in a comment.
+- Go: standard library first, `gofmt`-formatted, every error handled or deliberately ignored with a comment. Keep packages small and add one only when there is a concrete need.
 - Comments explain why, not what.
 - Keep modules small and single-purpose, following the source boundaries in `docs/architecture.md`.
-- Validate input at API boundaries with shared schemas.
+- Validate all input at API boundaries, in Go. Response types are declared in Go and mirrored in `src/client/api`; tests on both sides pin the JSON.
 - Explain important architectural decisions in the PR description and, when lasting, in `docs/decisions.md`.
-- Package manager is npm; test runner is Vitest (see ADR-012). A linter and formatter are still to be chosen in Phase 1 and then documented here. Do not assume tools or package scripts that do not exist yet.
+- Package manager is npm; frontend tests use Vitest (ADR-012); backend tests use Go `testing` and `httptest` (ADR-013). A frontend linter and formatter are still to be chosen in Phase 1 and then documented here. Do not assume tools or package scripts that do not exist yet.
 
 ## Security requirements
 - Single administrator; no public registration.
@@ -114,7 +120,7 @@ Treat implementation as untrusted, including your own work.
 ## Testing and quality gates
 Before reporting completion:
 - Run applicable tests.
-- Run typecheck and lint if configured.
+- Run typecheck and lint if configured. For Go: `gofmt -l .`, `go vet ./...` and `go test ./...`.
 - Run production build.
 - Build the Docker image when Docker files are affected.
 - Test migrations against PostgreSQL.

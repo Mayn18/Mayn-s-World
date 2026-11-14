@@ -6,27 +6,77 @@ The visual direction is inspired by my earlier project, [Beep-Bot](https://githu
 
 ## Status
 
-Phase 1, in progress. The repository contains documentation, GitHub templates and a minimal application skeleton: a React page that calls a Hono `GET /api/health` endpoint. There is no database, Docker setup or website content yet, and nothing is deployed.
+Phase 1, in progress. The repository contains documentation, GitHub templates and a working application skeleton: a React page that calls a Go `GET /api/health` endpoint, with the Go server also able to serve the built React app from one origin. There is no database, Docker setup or website content yet, and nothing is deployed.
+
+## Technology
+
+- Frontend: React, TypeScript, Vite, Tailwind CSS (Motion planned)
+- Backend: Go, standard library `net/http` only
+- Node.js 26 LTS and npm: frontend tooling and builds only, not the production backend
+- Tests: Vitest (frontend), Go `testing` + `httptest` (backend)
+- Planned: PostgreSQL 17 with `pgx` and Goose migrations, multi-stage Docker image, Docker Compose
+- Initial hosting: Render Free and Neon Free, with a path to self-hosting on Linux
+
+## Repository structure
+
+```
+cmd/server/        Go program entry point (startup, graceful shutdown)
+internal/config/   environment configuration (PORT, STATIC_DIR)
+internal/handlers/ HTTP handlers, JSON helpers, React app file server
+internal/server/   routes, middleware, http.Server timeouts
+src/client/        React app (app/, api/, main.tsx, styles.css)
+index.html         Vite entry page
+vite.config.ts     Vite, Tailwind, test and dev-proxy configuration
+docs/              requirements, architecture, design, roadmap, decisions
+```
 
 ## Running it locally
 
-Requires Node.js 26 (see `.nvmrc`).
+Requires Node.js 26 (see `.nvmrc`) and Go 1.24 or newer.
+
+**Development** (two terminals; the browser uses Vite on port 5173):
 
 ```bash
-npm install
-npm run dev:server   # terminal 1: API on http://localhost:3000
-npm run dev:client   # terminal 2: app on http://localhost:5173
+npm install                # once
+go run ./cmd/server        # terminal 1: Go API on http://localhost:8080
+npm run dev:client         # terminal 2: React on http://localhost:5173
 ```
 
-Other commands: `npm run typecheck`, `npm test`, `npm run build`, and `npm start` (serves the production build, API and page together, on port 3000).
+Open http://localhost:5173. The page shows "Server status: ok" when it can reach Go. Stop the Go server and reload to see the error state.
 
-## Planned technology
+**Production-like** (one process, one origin):
 
-- Frontend: React, TypeScript, Vite, Tailwind CSS, Motion
-- Backend: Hono on Node.js 26 LTS
-- Database: PostgreSQL 17 with Drizzle ORM
-- Packaging: multi-stage Docker image; Docker Compose for local development
-- Initial hosting: Render Free and Neon Free, with a path to self-hosting on Linux
+```bash
+npm run build              # React app -> dist/client
+go run ./cmd/server        # serves the app and the API on http://localhost:8080
+```
+
+Run commands from the repository root: the server looks for `dist/client` relative to the working directory.
+
+### Configuration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | `8080` | Port to listen on. The server always binds `0.0.0.0`. |
+| `STATIC_DIR` | `dist/client` | Folder containing the built React app. |
+
+### How React talks to Go
+
+The frontend calls relative URLs like `fetch('/api/health')`. In development, Vite (port 5173) forwards `/api/*` to Go (port 8080), so the browser sees one origin and no CORS setup is needed. In production, the Go server delivers both the page and the API itself. See [Architecture](docs/architecture.md) and ADR-013.
+
+### Tests and checks
+
+```bash
+# Backend
+gofmt -l .                 # must print nothing
+go vet ./...
+go test ./...
+
+# Frontend
+npm run typecheck
+npm test
+npm run build
+```
 
 ## Documentation
 

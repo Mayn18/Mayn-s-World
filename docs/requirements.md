@@ -83,7 +83,7 @@ See `docs/visual-design.md`. Core destinations work with mouse, keyboard and tou
 Keep first load lightweight and usable on modest hardware. Avoid unnecessary continuous animation, and pause or reduce ambient effects when the page is hidden.
 
 ### Portability and persistence
-- Standard Node.js and PostgreSQL interfaces only; no provider-specific runtime APIs.
+- Standard Go and PostgreSQL interfaces only; no provider-specific runtime APIs.
 - Durable data lives in PostgreSQL (or a future S3-compatible store), never the application container filesystem.
 - Moving from Render + Neon to self-hosted Linux requires configuration and a data restore, not code changes.
 
