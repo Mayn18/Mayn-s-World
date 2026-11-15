@@ -7,7 +7,7 @@ The visual reference is the owner's repository: https://github.com/Mayn18/Beep-B
 Use its design philosophy (multiple themed worlds, pixel-art atmosphere, ambient effects, reusable UI skins and saved preferences) as inspiration. Do not copy its code or assets without checking their licenses.
 
 ## Current status
-Phase 1 (technical foundation). The React + TypeScript + Vite frontend and the Go (`net/http`) backend exist, with `GET /api/health` and single-origin serving. A multi-stage production Dockerfile and a Docker Compose stack (app + PostgreSQL 17) exist, and `GET /api/health` reports database connectivity. No tables, migrations, authentication or website features exist yet. The backend moved from Hono to Go in ADR-013. See `docs/development-roadmap.md`.
+Phase 1 (technical foundation). The React + TypeScript + Vite frontend and the Go (`net/http`) backend exist, with `GET /api/health` and single-origin serving. A multi-stage production Dockerfile and a Docker Compose stack (app + PostgreSQL 17) exist, and `GET /api/health` reports database connectivity. The home page shows the first Daytime Meadow scene (SVG pixel art, six destinations that open placeholder panels, an accessible destination index; see ADR-015). No tables, migrations, authentication or real page content exist yet. The backend moved from Hono to Go in ADR-013. See `docs/development-roadmap.md`.
 
 ## Commands (these exist; nothing else should be assumed)
 Backend (Go):
@@ -90,6 +90,8 @@ Treat implementation as untrusted, including your own work.
 - All durable data belongs in PostgreSQL or a future S3-compatible object store, never the Render container filesystem.
 - Use environment variables for deployment configuration and secrets. Never commit secrets.
 - Keep world-rendering code free of API, authentication and database logic.
+- Colours: components and sprites use theme colour names (`colorVar`, `var(--c-...)` or Tailwind `bg-paper` and friends), never hex values. Hex values live only in `src/client/world/themes.ts`, and `themes.test.ts` enforces contrast.
+- Pixel art: sprites are text grids in `src/client/world/art/sprites.ts`. Every row must be the same width.
 
 ## Product and visual invariants
 - Navigation is exploration-based: the environment itself is the primary navigation surface.

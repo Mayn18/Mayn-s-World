@@ -151,3 +151,19 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 - **Goose migrations are not part of this change.** No tables exist yet. Migrations arrive with the Phase 2 data model.
 
 **Trade-offs accepted:** the Compose password is placed in a URL, so it must avoid URL-special characters (documented in `.env.example`); `Config` hides the URL in formatted output, which costs a small `String` method.
+
+## ADR-015 — Frontend visual foundation: SVG sprites, palette-driven themes, hash navigation
+**Status:** Accepted.
+
+**Decision:** the Daytime Meadow home page is built from inline SVG pixel art written as text grids, themed through a typed palette that becomes CSS variables, with real DOM links over the art and a plain destination index beside it. Destinations are selected through the URL hash, with no router library yet.
+
+**Choices and reasons:**
+- **Inline SVG sprites from text grids, not a canvas or image files.** Keeps all content in the DOM (invariant: no whole-site canvas), needs no external or paid assets, cannot fail to load, and the art is reviewable as text in a pull request. Trade-off: hand-drawn art in this format is limited to small sprites; larger or animated art may later justify image sprite sheets.
+- **Colours by name, values in a TypeScript palette.** One place defines every colour, sprites and UI never hold hex values, and a test can enforce contrast for every theme. Trade-off: the palette lives in JavaScript, so colours are applied by a small script before React renders instead of only by a stylesheet.
+- **Real links over the art, plus a permanent destination index.** Exploration is the primary surface, but never the only one (invariant). Below 720px the scene's links are removed (not hidden) and the index becomes the main way in: tiny tap targets and duplicate tab stops are worse than a scenic banner.
+- **URL hash instead of a router.** The pages do not exist until Phase 5, and a hash gives deep links and Back and Forward for free. Trade-off: hash URLs are replaced by real paths when pages arrive. That change is contained: `parseHash` and `useSelectedDestination`.
+- **CSS-only ambient motion.** Only `transform` is animated; there are a few elements. Motion (the animation library) is not added because nothing needs it yet. The in-page switch is locked off when the operating system asks for reduced motion.
+- **One new dependency, `@fontsource-variable/pixelify-sans`.** Self-hosts an open-licensed pixel font so no third-party font host is contacted. Only headings and labels use it. Body text stays in the system font.
+- **No linter or formatter was added.** That decision is still open in Phase 1.
+
+**Not yet decided:** theme switching and persistence (Phase 4), the real routing approach (Phase 5), whether the optional avatar uses sprites in the same format.

@@ -36,22 +36,32 @@ Acceptance: clean local Docker startup and production image startup. Phase 1 is 
 
 Acceptance: migrations can be applied to an empty database and backed up/restored.
 
-## Phase 3 — Exploration prototype
-- One polished environment.
-- Clickable destinations.
-- Map/destination index.
-- Keyboard and touch navigation.
-- Accessible labels and focus states.
-- Responsive behavior.
+## Phase 3 — Exploration prototype (in progress)
+Done (frontend visual foundation):
+- One environment: the Daytime Meadow, drawn as inline SVG pixel art (cabin, notice board, mailbox, signpost, trees, path, clouds, sun).
+- Clickable destinations: the cabin (About), notice board (Projects), mailbox (Contact) and signpost planks (Blog, Resume, GitHub). Each opens a placeholder panel; GitHub opens the owner's profile in a new tab.
+- Destination index: a plain `<nav>` list of all six destinations.
+- Keyboard and touch navigation, visible focus rings, descriptive labels, a skip link and landmarks.
+- Responsive layout: interactive scene from 720px wide; below that the scene is a scenic banner and the index becomes large touch cards.
+- Ambient motion (drifting clouds, swaying flowers) with an in-page switch, a saved preference and `prefers-reduced-motion` support.
 
-Acceptance: visitors can reach every core destination without avatar movement.
+Remaining:
+- Real destination pages (Phase 5). Until then each destination shows a placeholder panel and nothing else.
+- Optional avatar and movement.
+- Owner review of the art and layout, and a check on real phones and tablets.
 
-## Phase 4 — Pixel UI and theme engine
-- Reusable pixel-art UI components.
-- Centralized theme registry.
-- Implement and polish the first theme.
-- Add remaining themes progressively.
-- Theme persistence and crossfade.
+Acceptance: visitors can reach every core destination without avatar movement. Met for navigation to the placeholder panels; the phase stays open until the owner has reviewed it.
+
+## Phase 4 — Pixel UI and theme engine (started)
+Done (frontend visual foundation):
+- Centralized theme registry (`src/client/world/themes.ts`): a typed palette becomes CSS variables. One theme exists, Daytime Meadow, with a test that checks its text and focus-ring contrast.
+- Reusable pixel UI: `PixelSprite`, `PixelPanel`, and the `pixel-button` and `pixel-card` styles.
+- A self-hosted pixel heading font.
+
+Remaining:
+- The other five themes (Cozy Night, Rainy Evening, Sunset Dream, Enchanted Forest, Snowy Cabin), each a new palette plus any scene changes.
+- Theme switcher, theme persistence and crossfade.
+- Polish pass on the first theme.
 
 Acceptance: themes change presentation without changing functionality.
 
