@@ -45,6 +45,13 @@ Done (frontend visual foundation):
 - Responsive layout: interactive scene from 720px wide; below that the scene is a scenic banner and the index becomes large touch cards.
 - Ambient motion (drifting clouds, swaying flowers) with an in-page switch, a saved preference and `prefers-reduced-motion` support.
 
+Done (town render foundation, milestone 1):
+- `layout.json` copied unmodified into `src/client/world/data/`, with a validating loader.
+- Isometric projection, back-to-front drawing order, tile picking and a terrain painter, each with tests (ADR-016).
+- A 32 x 24 tile terrain patch drawn on a canvas below the meadow, with elevation, cliff faces, water and a tile-under-cursor readout.
+
+Remaining for the town: buildings, vegetation and props; the full 80 x 60 map; camera (pan and zoom); selectable destination buildings; ambient life. The meadow stays until the town replaces it.
+
 Remaining:
 - Real destination pages (Phase 5). Until then each destination shows a placeholder panel and nothing else.
 - Optional avatar and movement.

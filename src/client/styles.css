@@ -293,3 +293,23 @@ html[data-page-hidden] .ambient-sway {
     scroll-behavior: auto !important;
   }
 }
+
+/* The isometric terrain canvas (world/TownCanvas.tsx). The width and height
+   attributes on the element give it its proportions; height:auto keeps them
+   when the width shrinks. image-rendering keeps pixel edges hard when scaled.
+   TownCanvas.tsx also sets max-width to the drawing's own width, so on a wide
+   screen it is shown at its natural size (1 canvas pixel = 1 CSS pixel) and is
+   only ever scaled down, never up. */
+.town-canvas {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  background: var(--c-sky-low);
+  box-shadow:
+    0 -4px 0 0 var(--c-border),
+    0 4px 0 0 var(--c-border),
+    -4px 0 0 0 var(--c-border),
+    4px 0 0 0 var(--c-border);
+}

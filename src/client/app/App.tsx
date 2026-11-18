@@ -4,6 +4,7 @@ import { useSelectedDestination } from '../components/navigation/useSelectedDest
 import { MotionToggle } from '../components/MotionToggle';
 import { ServerStatus } from '../components/ServerStatus';
 import { home } from '../content/home';
+import { TownCanvas } from '../world/TownCanvas';
 import { MeadowScene } from '../world/scenes/MeadowScene';
 
 // The home page. Reading top to bottom (which is also the order a screen
@@ -35,6 +36,15 @@ export function App() {
               jumps here. */}
           <section id="meadow" className="scroll-mt-6">
             <MeadowScene />
+          </section>
+
+          {/* Development preview of the town renderer (milestone 1). The
+              meadow above stays until the town replaces it. */}
+          <section aria-labelledby="town-preview-heading" className="flex flex-col gap-4">
+            <h2 id="town-preview-heading" className="font-pixel text-2xl">
+              Town terrain preview
+            </h2>
+            <TownCanvas />
           </section>
 
           {selected && <DestinationPanel key={selected} id={selected} />}

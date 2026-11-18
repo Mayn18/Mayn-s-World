@@ -153,7 +153,7 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 **Trade-offs accepted:** the Compose password is placed in a URL, so it must avoid URL-special characters (documented in `.env.example`); `Config` hides the URL in formatted output, which costs a small `String` method.
 
 ## ADR-015 — Frontend visual foundation: SVG sprites, palette-driven themes, hash navigation
-**Status:** Accepted.
+**Status:** Accepted. Partly superseded by ADR-016: the "SVG, not a canvas" choice no longer applies to the town's world-rendering layer. Everything else here still stands.
 
 **Decision:** the Daytime Meadow home page is built from inline SVG pixel art written as text grids, themed through a typed palette that becomes CSS variables, with real DOM links over the art and a plain destination index beside it. Destinations are selected through the URL hash, with no router library yet.
 
@@ -167,3 +167,36 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 - **No linter or formatter was added.** That decision is still open in Phase 1.
 
 **Not yet decided:** theme switching and persistence (Phase 4), the real routing approach (Phase 5), whether the optional avatar uses sprites in the same format.
+
+## ADR-016 — Canvas 2D for the isometric world-rendering layer
+**Status:** Accepted.
+
+**Relationship to ADR-015:** ADR-015 drew the meadow as inline SVG and rejected a canvas. That was right for a scene of about thirty sprites. It does not scale to the approved town: an 80 x 60 tile map is 4,800 tiles before buildings, trees, props and ambient animation, and an SVG document with that many nodes is slow to build, style and animate. ADR-016 therefore replaces the SVG choice **for the world layer only**. The rest of ADR-015 is unchanged: colours by name from the theme registry, real DOM links and a permanent destination index, hash navigation, CSS-only interface motion, and the self-hosted pixel font. The meadow stays as built until the town replaces it.
+
+**Decision:** the isometric town is drawn with Canvas 2D in `src/client/world/`. React owns the `<canvas>` element and decides when to draw; the drawing logic lives in plain modules that know nothing about React.
+
+**Boundaries (these keep the invariant "no whole-site canvas" true):**
+- The canvas draws the world only: terrain, then later buildings, vegetation and ambient life.
+- Text, links, buttons, forms and panels stay in the DOM. Destination buildings will get real `<a>` elements positioned over the canvas from the same projection, so keyboard and screen-reader navigation does not depend on the canvas.
+- The canvas is `role="img"` with a text description until something in it is interactive.
+- Navigation stays outside the renderer: it reports "building N was selected" and a destination lookup (`content/destinations.ts`) decides what that means.
+
+**Structure (responsibilities kept separate and independently testable):**
+- `world/data/`: `layout.json` (unmodified source of truth), `types.ts`, and `loader.ts`, which validates the file and turns the row strings into typed arrays.
+- `world/render/projection.ts`: tile to screen maths (2:1 isometric, 32 x 16 tiles, 10 px per level) and its inverse.
+- `world/render/depth.ts`: back-to-front drawing order.
+- `world/render/picking.ts`: which tile is under a screen point.
+- `world/render/terrainPainter.ts` and `terrainPalette.ts`: the only code that draws, and the theme-to-colour step.
+- `world/TownCanvas.tsx`: the React component.
+
+**Choices and reasons:**
+- **No new dependency.** The browser's own Canvas 2D API is enough. A game engine would bring concepts and a bundle size this project does not need.
+- **Colours come from the Theme object, not from CSS variables.** A canvas cannot read `var(--c-grass)`. `terrainPalette(theme)` reads the same typed palette that sets the CSS variables, so the canvas and the page cannot disagree and there are still no colour values outside `themes.ts`.
+- **`layout.json` is copied into the repository unmodified** and validated at load. Visual detail that the JSON does not contain (roofs, tree species, castle height) will live in separate renderer-side files keyed to it, so the geography can be checked against the data alone.
+- **Drawing resolution equals the art size** (1 canvas pixel = 1 art pixel). CSS scales it down only, with `image-rendering: pixelated`. It is never scaled up, because a non-integer upscale makes some pixels wider than others.
+- **Each polygon is filled and then stroked in the same colour.** Anti-aliasing otherwise leaves hairline gaps between neighbouring diamonds.
+- **A one-level "slab" under the patch's south and east edges** makes a cut-out of the map look like a solid block.
+
+**Trade-offs accepted:** the world is not in the DOM, so nothing in it is automatically accessible or searchable; the accessible overlay and the destination index carry that duty. Canvas pixels cannot be unit-tested the way DOM can; tests cover the maths, ordering, data and the sequence of drawing calls, and the look is checked by eye. A theme change must trigger a redraw.
+
+**Not yet decided:** the depth-sorting rule for buildings and other multi-tile objects, camera and zoom behaviour, how sprites are supplied (procedural, hand-made or generated), animation layers, and how the whole 80 x 60 map is cached for performance.

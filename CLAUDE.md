@@ -90,6 +90,7 @@ Treat implementation as untrusted, including your own work.
 - All durable data belongs in PostgreSQL or a future S3-compatible object store, never the Render container filesystem.
 - Use environment variables for deployment configuration and secrets. Never commit secrets.
 - Keep world-rendering code free of API, authentication and database logic.
+- The town's world layer is drawn with Canvas 2D (ADR-016); the map comes from `src/client/world/data/layout.json`, which is the geographical source of truth and is not edited without the owner's approval. Text, links and controls stay in the DOM.
 - Colours: components and sprites use theme colour names (`colorVar`, `var(--c-...)` or Tailwind `bg-paper` and friends), never hex values. Hex values live only in `src/client/world/themes.ts`, and `themes.test.ts` enforces contrast.
 - Pixel art: sprites are text grids in `src/client/world/art/sprites.ts`. Every row must be the same width.
 
