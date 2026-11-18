@@ -29,14 +29,15 @@
 }
 
 html {
-  background: var(--c-paper);
+  background: var(--c-sky-low);
   color: var(--c-ink);
-  /* Keeps the page from jumping when a scrollbar appears. */
-  scrollbar-gutter: stable;
 }
 
 body {
   margin: 0;
+  /* The page is one full-window world and never scrolls. Without this, 100vw
+     (which includes any scrollbar's width) could add a horizontal scrollbar. */
+  overflow: hidden;
   /* Readable body font; the pixel font is opt-in with font-pixel. */
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   line-height: 1.6;
@@ -294,22 +295,50 @@ html[data-page-hidden] .ambient-sway {
   }
 }
 
-/* The isometric terrain canvas (world/TownCanvas.tsx). The width and height
-   attributes on the element give it its proportions; height:auto keeps them
-   when the width shrinks. image-rendering keeps pixel edges hard when scaled.
-   TownCanvas.tsx also sets max-width to the drawing's own width, so on a wide
-   screen it is shown at its natural size (1 canvas pixel = 1 CSS pixel) and is
-   only ever scaled down, never up. */
-.town-canvas {
+/* The world fills the browser window (world/TownCanvas.tsx, app/App.tsx).
+
+   .world-viewport is exactly the window: 100vw wide and 100dvh tall. "dvh" is the
+   *dynamic* viewport height, which follows a phone's address bar as it shows and
+   hides; plain 100vh would be taller than the visible area and push the bottom
+   of the world off screen. The background is the sky, so the space around the
+   terrain (the terrain keeps its proportions and is centred, see
+   render/viewTransform.ts) reads as open sky rather than as letterbox bars. */
+.world-viewport {
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: linear-gradient(to bottom, var(--c-sky-top), var(--c-sky-mid) 55%, var(--c-sky-low));
+}
+
+/* The canvas's own box: the code reads this box's size and draws into it. */
+.world-box {
+  position: absolute;
+  inset: 0;
+}
+.world-canvas {
   display: block;
   width: 100%;
-  max-width: 100%;
-  height: auto;
-  image-rendering: pixelated;
-  background: var(--c-sky-low);
-  box-shadow:
-    0 -4px 0 0 var(--c-border),
-    0 4px 0 0 var(--c-border),
-    -4px 0 0 0 var(--c-border),
-    4px 0 0 0 var(--c-border);
+  height: 100%;
+}
+
+/* Developer readout of the tile under the pointer. A small label over the world,
+   not page content; it goes when real interaction exists. */
+.world-readout {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 4px 10px;
+  max-width: calc(100% - 24px);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--c-ink);
+  background: color-mix(in srgb, var(--c-paper) 88%, transparent);
+  pointer-events: none;
+}
+
+.world-fallback {
+  margin: 0;
+  padding: 24px;
 }

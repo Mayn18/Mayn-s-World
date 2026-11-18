@@ -171,7 +171,7 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 ## ADR-016 — Canvas 2D for the isometric world-rendering layer
 **Status:** Accepted.
 
-**Relationship to ADR-015:** ADR-015 drew the meadow as inline SVG and rejected a canvas. That was right for a scene of about thirty sprites. It does not scale to the approved town: an 80 x 60 tile map is 4,800 tiles before buildings, trees, props and ambient animation, and an SVG document with that many nodes is slow to build, style and animate. ADR-016 therefore replaces the SVG choice **for the world layer only**. The rest of ADR-015 is unchanged: colours by name from the theme registry, real DOM links and a permanent destination index, hash navigation, CSS-only interface motion, and the self-hosted pixel font. The meadow stays as built until the town replaces it.
+**Relationship to ADR-015:** ADR-015 drew the meadow as inline SVG and rejected a canvas. That was right for a scene of about thirty sprites. It does not scale to the approved town: an 80 x 60 tile map is 4,800 tiles before buildings, trees, props and ambient animation, and an SVG document with that many nodes is slow to build, style and animate. ADR-016 therefore replaces the SVG choice **for the world layer only**. The rest of ADR-015 is unchanged: colours by name from the theme registry, real DOM links and a permanent destination index, hash navigation, CSS-only interface motion, and the self-hosted pixel font. The meadow files are not modified by this ADR (ADR-017 later removed the meadow from the page).
 
 **Decision:** the isometric town is drawn with Canvas 2D in `src/client/world/`. React owns the `<canvas>` element and decides when to draw; the drawing logic lives in plain modules that know nothing about React.
 
@@ -200,3 +200,25 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 **Trade-offs accepted:** the world is not in the DOM, so nothing in it is automatically accessible or searchable; the accessible overlay and the destination index carry that duty. Canvas pixels cannot be unit-tested the way DOM can; tests cover the maths, ordering, data and the sequence of drawing calls, and the look is checked by eye. A theme change must trigger a redraw.
 
 **Not yet decided:** the depth-sorting rule for buildings and other multi-tile objects, camera and zoom behaviour, how sprites are supplied (procedural, hand-made or generated), animation layers, and how the whole 80 x 60 map is cached for performance.
+
+## ADR-017 — The isometric world is the full-window home page
+**Status:** Accepted.
+
+**Decision:** the home page is one canvas filling the browser window (`100vw x 100dvh`) and nothing else. The meadow scene, the "Where to?" destination index, the page header, footer and the centred narrow layout were removed from `App.tsx`. The visitor is meant to enter a world, not visit a page that contains a game preview.
+
+**What was kept:** every removed component, `content/destinations.ts`, `content/home.ts`, the hash-navigation hooks and the meadow art remain in the repository, unused. Destinations will be connected to buildings in a later milestone through the same content modules. The renderer does not import any of them.
+
+**Sizing:**
+- The canvas fills its box and is redrawn when the box resizes (`ResizeObserver`, plus `resize` for device-pixel-ratio changes). Its drawing buffer is the box size times `devicePixelRatio`, so it is sharp on dense screens.
+- The terrain is scaled by one number, the same horizontally and vertically, and centred (`render/viewTransform.ts`, "contain" fitting), so it is never stretched. The space around it is a sky gradient taken from the theme's sky colours.
+- `dvh` rather than `vh`, so a phone's address bar showing or hiding does not push the bottom of the world off screen. `body` is `overflow: hidden` and the old `scrollbar-gutter` rule was removed because the page no longer scrolls.
+- Pointer positions go back through the same transform before tile picking, so picking stays correct at any window size.
+
+**Known consequences:**
+- **Accessibility gap, deliberate and temporary:** with the destination index gone there is no navigation UI. Navigation is a stated invariant (a visible destination index and accessible fallback), so it must come back before any destination is considered reachable. The page keeps a visually hidden `<h1>` and the canvas has a text description.
+- The 32 x 24 patch is a temporary stand-in, not the town. It is a floating slab on a sky, and is small on a tall, narrow screen because the patch is wide.
+- Scaling is fractional (not whole-number), which suits vector-drawn terrain. Bitmap sprites will need their own scaling rule (probably whole-number pixel scales) when they arrive.
+- The ambient-motion switch and server-status line are no longer shown. Their code remains.
+
+**Not yet decided:** camera pan and zoom (the fit calculation is the starting point), minimum and maximum zoom, and how the interface (title, map index, controls) overlays the world.
+
