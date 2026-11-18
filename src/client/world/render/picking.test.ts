@@ -1,59 +1,97 @@
 import { describe, expect, it } from 'vitest';
-import type { Terrain } from '../data/types';
-import { type Patch } from './patch';
+import { makeTerrain } from '../terrain/fixtures';
+import { buildTerrainModel } from '../terrain/model';
+import { townModel } from '../terrain/town';
+import { worldBounds } from './bounds';
 import { pickTile } from './picking';
 import { tileCenter } from './projection';
+import { fitContain, viewToContent } from './viewTransform';
 
-const patch: Patch = { x: 0, y: 0, width: 3, height: 3 };
-
-function flat(level: number): Terrain {
-  return {
-    width: 3,
-    height: 3,
-    levels: Array.from({ length: 3 }, () => [level, level, level]),
-    water: Array.from({ length: 3 }, () => [false, false, false]),
-  };
+// A tile's centre can be hidden behind a taller tile in front of it (a level 4 tile
+// covers about 40 px of the ground behind it). Picking must return the tile the
+// visitor SEES, so only tiles whose centre is not covered are expected to pick
+// themselves. This works out which those are by a separate brute-force check: no
+// tile drawn later has a top diamond containing the centre.
+function covered(x: number, y: number): boolean {
+  const c = tileCenter({ x, y }, townModel.surface[y]![x]!);
+  for (let ny = y; ny <= Math.min(59, y + 12); ny++) {
+    for (let nx = x; nx <= Math.min(79, x + 12); nx++) {
+      if (nx + ny <= x + y) continue;
+      const o = tileCenter({ x: nx, y: ny }, townModel.surface[ny]![nx]!);
+      if (Math.abs(c.sx - o.sx) / 16 + Math.abs(c.sy - o.sy) / 8 <= 1) return true;
+    }
+  }
+  return false;
 }
+const visible = townModel.order.filter(({ x, y }) => !covered(x, y));
 
 describe('pickTile', () => {
-  it('finds a tile from the centre of its top surface', () => {
-    const terrain = flat(0);
-    for (const [x, y] of [
-      [0, 0],
-      [2, 1],
-      [1, 2],
-    ] as const) {
-      const { sx, sy } = tileCenter({ x, y }, 0);
-      expect(pickTile(terrain, patch, sx, sy)).toMatchObject({ x, y, level: 0 });
+  it('finds a tile from the centre of its top surface wherever that centre is visible', () => {
+    // Most of the map is visible; the rest is hidden behind taller ground.
+    expect(visible.length).toBeGreaterThan(4000);
+    for (const { x, y } of visible) {
+      const { sx, sy } = tileCenter({ x, y }, townModel.surface[y]![x]!);
+      expect(pickTile(townModel, sx, sy), `(${x}, ${y})`).toMatchObject({ x, y });
     }
   });
 
-  it('returns nothing for a point outside the patch', () => {
-    expect(pickTile(flat(0), patch, 5000, 5000)).toBeNull();
+  it('returns the nearer, taller tile where ground is hidden', () => {
+    const hidden = townModel.order.find(({ x, y }) => covered(x, y))!;
+    const { sx, sy } = tileCenter(hidden, townModel.surface[hidden.y]![hidden.x]!);
+    const picked = pickTile(townModel, sx, sy)!;
+    expect(picked.x + picked.y).toBeGreaterThan(hidden.x + hidden.y);
   });
 
-  it('reports water tiles', () => {
-    const terrain = flat(1);
-    (terrain.water as boolean[][])[1]![1] = true;
-    const { sx, sy } = tileCenter({ x: 1, y: 1 }, 1);
-    expect(pickTile(terrain, patch, sx, sy)).toMatchObject({ x: 1, y: 1, water: true });
+  it('reports level and water', () => {
+    const wet = townModel.order.find(({ x, y }) => townModel.terrain.water[y]![x]!)!;
+    const { sx, sy } = tileCenter(wet, townModel.surface[wet.y]![wet.x]!);
+    expect(pickTile(townModel, sx, sy)).toMatchObject({
+      x: wet.x,
+      y: wet.y,
+      water: true,
+      level: townModel.terrain.levels[wet.y]![wet.x],
+    });
   });
 
-  it('picks the nearer, higher tile when it hides a tile behind it', () => {
-    // Tile (1, 1) is 3 levels up, so its top is lifted 30 px. A point at the
-    // middle of that raised top must return (1, 1).
-    const terrain = flat(0);
-    (terrain.levels as number[][])[1]![1] = 3;
-    const { sx, sy } = tileCenter({ x: 1, y: 1 }, 3);
-    expect(pickTile(terrain, patch, sx, sy)).toMatchObject({ x: 1, y: 1, level: 3 });
+  it('prefers the nearer tile where a tall tile\'s top hides the one behind', () => {
+    const model = buildTerrainModel(makeTerrain([[0, 0, 0], [0, 0, 0], [0, 0, 5]]));
+    // Tile (2,2) at level 5 is lifted 50 px: its centre is not on any lower tile centre.
+    const { sx, sy } = tileCenter({ x: 2, y: 2 }, 5);
+    expect(pickTile(model, sx, sy)).toMatchObject({ x: 2, y: 2, level: 5 });
   });
 
-  it('does not report the raised tile at the spot where its flat ground would have been', () => {
-    const terrain = flat(0);
-    (terrain.levels as number[][])[1]![1] = 3;
-    // The raised top sits 30 px higher on screen than level 0 would, so the
-    // old ground position is empty air: the tile is not found there.
-    const { sx, sy } = tileCenter({ x: 1, y: 1 }, 0);
-    expect(pickTile(terrain, patch, sx, sy)).toBeNull();
+  it('finds nothing outside the world', () => {
+    expect(pickTile(townModel, -100000, 0)).toBeNull();
   });
+});
+
+// The whole chain a pointer goes through: window -> picture -> projection -> tile.
+describe('picking stays accurate at different viewport sizes', () => {
+  const bounds = worldBounds(townModel);
+  const sizes: [string, number, number][] = [
+    ['desktop', 1440, 900],
+    ['full HD', 1920, 1080],
+    ['ultrawide', 3440, 1440],
+    ['portrait phone', 390, 844],
+    ['landscape phone', 844, 390],
+  ];
+
+  for (const [name, w, h] of sizes) {
+    it(`${name} (${w} x ${h}): pointing at a tile's centre on screen picks that tile`, () => {
+      const view = fitContain(w, h, bounds.width, bounds.height);
+      let checked = 0;
+      for (const { x, y } of visible) {
+        const c = tileCenter({ x, y }, townModel.surface[y]![x]!);
+        // Where that centre appears in the window:
+        const px = (c.sx - bounds.left) * view.scale + view.offsetX;
+        const py = (c.sy - bounds.top) * view.scale + view.offsetY;
+        // ...and the pointer path back to a tile:
+        const inPicture = viewToContent(view, px, py)!;
+        const picked = pickTile(townModel, inPicture.x + bounds.left, inPicture.y + bounds.top);
+        expect(picked, `(${x}, ${y})`).toMatchObject({ x, y });
+        checked++;
+      }
+      expect(checked).toBe(visible.length);
+    });
+  }
 });

@@ -6,13 +6,24 @@ props, fences, walls and districts.
 
 **Do not edit it without the owner's approval.** It was copied unmodified from the
 Stage 2 design export. `loader.ts` validates what the renderer uses (today the
-grid size, tile proportions, `heights` and `water`) and refuses anything that
-does not match. Visual detail the file does not contain belongs in separate
+grid size, tile proportions, `heights`, `water`, `roads` and `connections`) and
+refuses anything that does not match. Visual detail the file does not contain belongs in separate
 renderer-side files keyed to it, never in the JSON.
 
-Fields the renderer does not read yet: `roads`, `buildings`, `connections`,
-`districts`, `props`, `yards`, `fences`, `walls`, `vegetation`, `field_types`,
-`level_edges`, `checks`.
+Roads are rasterised to tiles (`roads.ts`) and connections are read, but neither
+is drawn yet; they are used to decide which terrain steps are retaining walls
+and which are climbable slopes. `level_edges` is compared with in tests only.
+
+Fields the renderer does not read yet: `buildings`, `districts`, `props`,
+`yards`, `fences`, `walls`, `vegetation`, `field_types`, `checks`.
+
+## Terrain boundaries are derived
+
+`level_edges` gives only totals (slope 152, castle 96, cliff 56, wall 133, bank 4),
+not locations, so the material of each step is derived in
+`../terrain/edges.ts`. Castle (96), cliff (56), bank (4) and slope + wall (285)
+match the file exactly; the slope / wall split is 156 / 129 here against
+152 / 133 in the file, an approximation documented in ADR-018.
 
 ## Known gaps against the Stage 2 v2 artwork
 

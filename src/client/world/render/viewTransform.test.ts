@@ -86,3 +86,26 @@ describe('viewToContent', () => {
     expect(viewToContent({ scale: 0, offsetX: 0, offsetY: 0 }, 10, 10)).toBeNull();
   });
 });
+
+describe('fitContain for the whole town picture', () => {
+  // 2240 wide by about 1200 tall; exact size is whatever worldBounds says.
+  const contentW = 2240;
+  const contentH = 1200;
+
+  it('keeps proportions at any window shape: one scale, content never exceeds the window', () => {
+    for (const [w, h] of [[1440, 900], [390, 844], [844, 390], [3440, 1440], [500, 500]] as const) {
+      const v = fitContain(w, h, contentW, contentH);
+      expect(contentW * v.scale).toBeLessThanOrEqual(w + 1e-9);
+      expect(contentH * v.scale).toBeLessThanOrEqual(h + 1e-9);
+      // At least one dimension fills the window exactly (it is "contain", not "shrink").
+      const fills = Math.abs(contentW * v.scale - w) < 1e-9 || Math.abs(contentH * v.scale - h) < 1e-9;
+      expect(fills).toBe(true);
+    }
+  });
+
+  it('centres the picture', () => {
+    const v = fitContain(1000, 1000, contentW, contentH);
+    expect(v.offsetX).toBeCloseTo((1000 - contentW * v.scale) / 2, 9);
+    expect(v.offsetY).toBeCloseTo((1000 - contentH * v.scale) / 2, 9);
+  });
+});

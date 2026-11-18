@@ -1,108 +1,108 @@
 import { describe, expect, it } from 'vitest';
-import type { Terrain } from '../data/types';
-import { type Patch, patchBounds } from './patch';
+import { makeTerrain } from '../terrain/fixtures';
+import { buildTerrainModel } from '../terrain/model';
+import { townModel } from '../terrain/town';
+import { defaultTheme } from '../themes';
+import { worldBounds } from './bounds';
+import { tileCorners } from './projection';
+import { recordingContext } from './recordingContext';
 import { paintTerrain } from './terrainPainter';
-import type { TerrainPalette } from './terrainPalette';
+import { terrainPalette } from './terrainPalette';
 
-// The painter only needs a handful of canvas methods. This stand-in records the
-// colour used for each fill() in order, so the test can check what was drawn and
-// in which order without a browser.
-function recordingContext() {
-  const fills: string[] = [];
-  let fillStyle = '';
-  const ctx = {
-    save() {},
-    restore() {},
-    translate() {},
-    beginPath() {},
-    moveTo() {},
-    lineTo() {},
-    closePath() {},
-    stroke() {},
-    set fillStyle(value: string) {
-      fillStyle = value;
-    },
-    get fillStyle() {
-      return fillStyle;
-    },
-    strokeStyle: '',
-    lineWidth: 1,
-    fill() {
-      fills.push(fillStyle);
-    },
-  };
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, fills };
-}
+const palette = terrainPalette(defaultTheme);
 
-const palette: TerrainPalette = {
-  top: ['top0', 'top1', 'top2', 'top3', 'top4', 'top5'],
-  water: 'water',
-  faceLit: 'lit',
-  faceShade: 'shade',
-};
-
-function terrainOf(levels: number[][], water?: boolean[][]): Terrain {
-  return {
-    width: levels[0]!.length,
-    height: levels.length,
-    levels,
-    water: water ?? levels.map((row) => row.map(() => false)),
-  };
-}
-
-function paint(terrain: Terrain, patch: Patch) {
-  const { ctx, fills } = recordingContext();
-  paintTerrain(ctx, terrain, patch, palette, patchBounds(patch, 5));
-  return fills;
+function paint(levels: number[][], options = {}) {
+  const model = buildTerrainModel(makeTerrain(levels, options));
+  const rec = recordingContext();
+  paintTerrain(rec.ctx, model, palette, worldBounds(model));
+  return { model, ...rec };
 }
 
 describe('paintTerrain', () => {
-  it('draws one top per tile plus the slab faces on the south and east edges of a flat patch', () => {
-    const patch: Patch = { x: 0, y: 0, width: 2, height: 2 };
-    const fills = paint(terrainOf([[0, 0], [0, 0]]), patch);
-    expect(fills.filter((c) => c === 'top0')).toHaveLength(4);
-    // 2 tiles on the south edge and 2 on the east edge.
-    expect(fills.filter((c) => c === 'lit')).toHaveLength(2);
-    expect(fills.filter((c) => c === 'shade')).toHaveLength(2);
+  it('draws a flat grass tile as its top diamond plus the map-edge skirt', () => {
+    const { polygons } = paint([[2]]);
+    const colours = polygons.map((p) => p.colour);
+    expect(colours).toEqual([palette.faces.skirt.lit, palette.faces.skirt.shade, palette.top[2]]);
   });
 
-  it('uses the water colour for water tiles and the level colour for land', () => {
-    const patch: Patch = { x: 0, y: 0, width: 2, height: 1 };
-    const fills = paint(terrainOf([[2, 0]], [[false, true]]), patch);
-    expect(fills).toContain('top2');
-    expect(fills).toContain('water');
-    expect(fills).not.toContain('top0');
+  it('draws a tile\'s faces before its top, so the top sits over them', () => {
+    const { polygons } = paint([[2]]);
+    expect(polygons.at(-1)!.colour).toBe(palette.top[2]);
   });
 
-  it('draws a cliff face only where the neighbour to the south or east is lower', () => {
-    // A 3 x 1 strip stepping down to the east: 2, 1, 0. Each step is a cliff,
-    // plus the slab beyond the last tile and the south slab under every tile.
-    const patch: Patch = { x: 0, y: 0, width: 3, height: 1 };
-    const fills = paint(terrainOf([[2, 1, 0]]), patch);
-    expect(fills.filter((c) => c === 'shade')).toHaveLength(3); // east of each tile
-    expect(fills.filter((c) => c === 'lit')).toHaveLength(3); // south slab of each tile
+  it('draws a far tile before a near one, so the near one covers it', () => {
+    const { polygons } = paint([[1, 3], [3, 1]]);
+    const tops = polygons.filter((p) => palette.top.includes(p.colour));
+    // Order by x + y then x: (0,0), (1,0), (0,1), (1,1).
+    expect(tops.map((p) => p.colour)).toEqual([
+      palette.top[1], palette.top[3], palette.top[3], palette.top[1],
+    ]);
   });
 
-  it('draws nothing south or east of a tile whose neighbour is higher', () => {
-    const patch: Patch = { x: 0, y: 0, width: 3, height: 1 };
-    const fills = paint(terrainOf([[0, 1, 2]]), patch);
-    // Going up to the east: no east faces except the final edge slab.
-    expect(fills.filter((c) => c === 'shade')).toHaveLength(1);
+  it('shades a south face lit and an east face darker, and uses the face\'s material', () => {
+    const { polygons } = paint([[4, 3]]); // castle step to the east of (0, 0)
+    expect(polygons.map((p) => p.colour)).toContain(palette.faces.castle.shade);
+    const south = paint([[4], [3]]).polygons.map((p) => p.colour);
+    expect(south).toContain(palette.faces.castle.lit);
   });
 
-  it('paints a tile behind (smaller x + y) before the tile in front of it', () => {
-    const patch: Patch = { x: 0, y: 0, width: 2, height: 2 };
-    // Distinct levels give each tile its own colour in the fill record.
-    const fills = paint(terrainOf([[0, 1], [2, 3]]), patch);
-    const tops = fills.filter((c) => c.startsWith('top'));
-    expect(tops[0]).toBe('top0'); // (0, 0) is furthest back
-    expect(tops[3]).toBe('top3'); // (1, 1) is nearest
+  it('draws water with a water colour, not grass', () => {
+    const { polygons } = paint([[1, 1]], { water: [[false, true]] });
+    const water = polygons.filter((p) => palette.water.includes(p.colour));
+    expect(water).toHaveLength(1);
   });
 
-  it('draws a tile\'s cliff faces before its own top surface', () => {
-    const patch: Patch = { x: 0, y: 0, width: 1, height: 1 };
-    const fills = paint(terrainOf([[3]]), patch);
-    expect(fills.at(-1)).toBe('top3');
-    expect(fills.slice(0, -1).sort()).toEqual(['lit', 'shade']);
+  it('puts the world\'s top-left at (0, 0) of the picture', () => {
+    const { polygons, model } = paint([[1, 1], [1, 1]]);
+    const bounds = worldBounds(model);
+    const xs = polygons.flatMap((p) => p.points.map((pt) => pt.sx));
+    const ys = polygons.flatMap((p) => p.points.map((pt) => pt.sy));
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(-1e-9);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(bounds.width + 1e-9);
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(-1e-9);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(bounds.height + 1e-9);
+  });
+
+  it('draws a shaded cap on a wall and strata lines on a cliff', () => {
+    const wall = paint([[2, 1]], { roads: [[true, true]] });
+    expect(wall.polygons.some((p) => p.colour === palette.wallCap)).toBe(true);
+    const cliff = paint([[4, 0]]);
+    expect(cliff.lines.some((l) => l.colour === palette.faces.cliff.line)).toBe(true);
+  });
+});
+
+describe('paintTerrain on the whole town', () => {
+  const bounds = worldBounds(townModel);
+  const { polygons } = (() => {
+    const rec = recordingContext();
+    paintTerrain(rec.ctx, townModel, palette, bounds);
+    return rec;
+  })();
+
+  it('paints one top for every one of the 4,800 tiles', () => {
+    const tops = new Set([...palette.top, ...palette.water]);
+    // Every tile gets exactly one top polygon; each is a 4-point diamond.
+    const diamonds = polygons.filter((p) => tops.has(p.colour) && p.points.length === 4);
+    expect(diamonds).toHaveLength(4800);
+  });
+
+  it('keeps everything inside the picture bounds', () => {
+    for (const p of polygons) {
+      for (const pt of p.points) {
+        expect(pt.sx).toBeGreaterThanOrEqual(-1e-6);
+        expect(pt.sx).toBeLessThanOrEqual(bounds.width + 1e-6);
+        expect(pt.sy).toBeGreaterThanOrEqual(-1e-6);
+        expect(pt.sy).toBeLessThanOrEqual(bounds.height + 1e-6);
+      }
+    }
+  });
+
+  it('matches the tile diamond exactly for a sample tile', () => {
+    const [x, y] = [38, 29];
+    const expected = tileCorners(x, y, townModel.surface[y]![x]!).map((p) => ({
+      sx: p.sx - bounds.left,
+      sy: p.sy - bounds.top,
+    }));
+    expect(polygons.some((p) => JSON.stringify(p.points) === JSON.stringify(expected))).toBe(true);
   });
 });

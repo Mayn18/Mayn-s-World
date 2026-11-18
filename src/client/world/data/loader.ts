@@ -8,7 +8,8 @@
 //
 // parseTerrain takes its input as an argument (instead of importing the file
 // itself) so tests can feed it deliberately broken data.
-import type { Terrain } from './types';
+import type { Crossing, CrossingKind, Terrain } from './types';
+import { rasterizeRoads } from './roads';
 import layoutJson from './layout.json';
 import { LEVEL_PX, TILE_H, TILE_W } from '../render/projection';
 
@@ -51,6 +52,32 @@ function positiveInteger(value: unknown, what: string): number {
   return value;
 }
 
+const CROSSING_KINDS: readonly string[] = ['ramp', 'stairs', 'bridge'];
+
+function readCrossings(raw: Record<string, unknown>, width: number, height: number): Crossing[] {
+  const list = raw.connections;
+  if (!Array.isArray(list)) {
+    throw new Error('layout.json: "connections" must be a list');
+  }
+  return list.map((entry: unknown, index) => {
+    if (!isRecord(entry)) {
+      throw new Error(`layout.json: connections[${index}] must be an object`);
+    }
+    const { road, kind, x, y } = entry;
+    if (typeof road !== 'string' || typeof kind !== 'string' || !CROSSING_KINDS.includes(kind)) {
+      throw new Error(`layout.json: connections[${index}] needs a road name and a kind of ramp, stairs or bridge`);
+    }
+    if (
+      typeof x !== 'number' || typeof y !== 'number' ||
+      !Number.isInteger(x) || !Number.isInteger(y) ||
+      x < 0 || x >= width || y < 0 || y >= height
+    ) {
+      throw new Error(`layout.json: connections[${index}] is outside the ${width} x ${height} map`);
+    }
+    return { road, kind: kind as CrossingKind, x, y };
+  });
+}
+
 export function parseTerrain(raw: unknown): Terrain {
   if (!isRecord(raw) || !isRecord(raw.grid)) {
     throw new Error('layout.json: missing "grid" section');
@@ -88,7 +115,10 @@ export function parseTerrain(raw: unknown): Terrain {
     }),
   );
 
-  return { width, height, levels, water };
+  const roads = rasterizeRoads(raw.roads, width, height);
+  const crossings = readCrossings(raw, width, height);
+
+  return { width, height, levels, water, roads, crossings };
 }
 
 // The town's terrain, read once when this module is first imported.

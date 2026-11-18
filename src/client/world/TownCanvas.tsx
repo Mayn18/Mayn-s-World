@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { townTerrain } from './data/loader';
-import { TERRAIN_PATCH, maxLevelInPatch, patchBounds } from './render/patch';
+import { worldBounds } from './render/bounds';
 import { type PickedTile, pickTile } from './render/picking';
 import { paintTerrain } from './render/terrainPainter';
 import { terrainPalette } from './render/terrainPalette';
 import { type ViewTransform, fitContain, viewToContent } from './render/viewTransform';
+import { townModel } from './terrain/town';
 import { defaultTheme, type Theme } from './themes';
 
 interface TownCanvasProps {
   theme?: Theme;
 }
 
-// The world, filling whatever box it is placed in (the page gives it the whole
+// The whole 80 x 60 town terrain, filling whatever box it is placed in (the page gives it the whole
 // browser window; see .world-viewport in styles.css).
 //
 // React's job is small: own the <canvas>, notice when its box changes size, and
@@ -41,12 +41,9 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
   const [hovered, setHovered] = useState<PickedTile | null>(null);
   const [unsupported, setUnsupported] = useState(false);
 
-  // The picture's own size and where it starts in projection space. Fixed for a
-  // given patch, so worked out once.
-  const bounds = useMemo(
-    () => patchBounds(TERRAIN_PATCH, maxLevelInPatch(townTerrain, TERRAIN_PATCH)),
-    [],
-  );
+  // The picture's own size and where it starts in projection space. Fixed for the
+  // town terrain, so worked out once.
+  const bounds = useMemo(() => worldBounds(townModel), []);
 
   const draw = useCallback(() => {
     const box = boxRef.current;
@@ -82,7 +79,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     // version; it simply draws into a scaled space.
     const k = view.scale * dpr;
     ctx.setTransform(k, 0, 0, k, view.offsetX * dpr, view.offsetY * dpr);
-    paintTerrain(ctx, townTerrain, TERRAIN_PATCH, terrainPalette(theme), bounds);
+    paintTerrain(ctx, townModel, terrainPalette(theme), bounds);
   }, [bounds, theme]);
 
   // Draw once the canvas exists, and redraw whenever its box changes size. The
@@ -111,7 +108,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
       event.clientY - rect.top,
     );
     const picked = inPicture
-      ? pickTile(townTerrain, TERRAIN_PATCH, inPicture.x + bounds.left, inPicture.y + bounds.top)
+      ? pickTile(townModel, inPicture.x + bounds.left, inPicture.y + bounds.top)
       : null;
     // Only update state when the tile changes, to avoid re-rendering on every
     // pixel of movement.
@@ -130,7 +127,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
         ref={canvasRef}
         className="world-canvas"
         role="img"
-        aria-label={`The world: a temporary ${TERRAIN_PATCH.width} by ${TERRAIN_PATCH.height} tile section of terrain with two levels of raised ground, cliff edges and part of the river.`}
+        aria-label={`The town's terrain, ${townModel.terrain.width} by ${townModel.terrain.height} tiles: a castle hill in the north, terraced town, cliffs, a winding river and surrounding farmland. Buildings are not drawn yet.`}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => setHovered(null)}
       />
@@ -139,7 +136,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
       <p className="world-readout">
         {hovered
           ? `Tile (${hovered.x}, ${hovered.y}) · level ${hovered.level}${hovered.water ? ' · water' : ''}`
-          : 'Terrain preview (temporary patch) · move the pointer over the ground'}
+          : 'Town terrain (no buildings yet) · move the pointer over the ground'}
       </p>
     </div>
   );

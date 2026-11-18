@@ -66,3 +66,30 @@ describe('tileCorners', () => {
     expect(centre.sy).toBe((n!.sy + s!.sy) / 2);
   });
 });
+
+describe('projection across the complete 80 x 60 map', () => {
+  it('maps the four map corners to the diamond\'s extremes', () => {
+    expect(mapToScreen(0, 0)).toEqual({ sx: 0, sy: 0 });
+    expect(mapToScreen(80, 0)).toEqual({ sx: 1280, sy: 640 });
+    expect(mapToScreen(0, 60)).toEqual({ sx: -960, sy: 480 });
+    expect(mapToScreen(80, 60)).toEqual({ sx: 320, sy: 1120 });
+  });
+
+  it('round-trips every tile centre at every level', () => {
+    for (let level = 0; level <= 5; level++) {
+      for (let y = 0; y < 60; y += 7) {
+        for (let x = 0; x < 80; x += 9) {
+          const c = tileCenter({ x, y }, level);
+          const back = screenToMap(c.sx, c.sy, level);
+          expect(back.x).toBeCloseTo(x + 0.5, 9);
+          expect(back.y).toBeCloseTo(y + 0.5, 9);
+        }
+      }
+    }
+  });
+
+  it('raises a tile 10 px per level: a level 5 tile sits 50 px above the same tile at level 0', () => {
+    expect(tileCenter({ x: 30, y: 20 }, 0).sy - tileCenter({ x: 30, y: 20 }, 5).sy).toBe(50);
+    expect(tileCorners(30, 20, 5)[0]!.sy).toBe(tileCorners(30, 20, 0)[0]!.sy - 50);
+  });
+});

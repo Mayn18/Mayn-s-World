@@ -216,9 +216,25 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 
 **Known consequences:**
 - **Accessibility gap, deliberate and temporary:** with the destination index gone there is no navigation UI. Navigation is a stated invariant (a visible destination index and accessible fallback), so it must come back before any destination is considered reachable. The page keeps a visually hidden `<h1>` and the canvas has a text description.
-- The 32 x 24 patch is a temporary stand-in, not the town. It is a floating slab on a sky, and is small on a tall, narrow screen because the patch is wide.
+- The 32 x 24 patch was a temporary stand-in; Milestone 2 (ADR-018) replaced it with the full 80 x 60 terrain. The terrain is still a wide diamond, so it is small on a tall, narrow screen.
 - Scaling is fractional (not whole-number), which suits vector-drawn terrain. Bitmap sprites will need their own scaling rule (probably whole-number pixel scales) when they arrive.
 - The ambient-motion switch and server-status line are no longer shown. Their code remains.
 
 **Not yet decided:** camera pan and zoom (the fit calculation is the starting point), minimum and maximum zoom, and how the interface (title, map index, controls) overlays the world.
+
+## ADR-018: Full-map terrain model and derived boundary materials
+
+**Status:** Accepted (Milestone 2).
+
+**Decision:** the renderer draws the complete 80 x 60 terrain from `layout.json`, replacing the 32 x 24 patch. Rendering is split into a pure terrain model (`src/client/world/terrain/`) and thin canvas painters (`render/`).
+
+**Why a model:** the file gives a height and a water flag per tile, but not what each step between heights is made of. `terrain/edges.ts` derives it from rules that use only data in the file. The renderer needs this knowledge to be testable without a canvas, so the painter is a loop over the model.
+
+**Derived materials, honestly:** `level_edges` in the file are totals without locations. Rules: water involved gives cascade or bank; a drop of 2 or more is cliff; a drop of 1 touching level 4 or higher is castle; any other drop of 1 is a retaining wall if at least half of its continuous straight run lies within one tile of a road, otherwise a grass slope, except at ramp and stairs tiles, which are always slope. Against the file's totals: castle 96 (exact), cliff 56 (exact), bank 4 (exact), slope + wall 285 (exact), but the split is 156 slope / 129 wall here against 152 / 133 in the file. The wall/slope split is therefore an approximation, isolated in `markRetainingWalls`, and may be changed on review.
+
+**Drawing:** painter's algorithm in order of increasing `x + y`. For each tile the south face, east face and top are drawn. A face's bottom edge is produced by the same projection call as the lower tile's top edge, so there are no seams (tested for every step in the town). Lighting is from the upper left: south faces lit, east faces shaded. Water surfaces sit 0.4 level below land, are shaded by distance from the shore and have a pale shore line. The map is drawn as a solid block with cut faces on its south and east edges.
+
+**Not done here:** roads (rasterised and loaded, so ramps, stairs and bridges can be drawn later, but not drawn), buildings, vegetation, props, animation, camera pan and zoom. The three duplicate-door pairs in `layout.json` remain unresolved and unchanged (see `src/client/world/data/README.md`).
+
+**Known limits:** picking tests only the top surface of tiles, so a point on a cliff face returns the tile visible behind it. Terrain colours come from the theme, but only one theme exists.
 

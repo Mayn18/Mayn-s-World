@@ -54,7 +54,10 @@ Done (full-viewport world, ADR-017):
 - The page is one full-window canvas (`100vw x 100dvh`). The terrain keeps its proportions, is centred and refits when the window resizes, on a sky background. The meadow scene and the destination index were removed from the page; their files and `content/destinations.ts` remain.
 - Known interim gap: there is no navigation UI until destinations become buildings, so the accessible-navigation invariant is not met on the home page for now. It must be restored when the six destination buildings are added.
 
-Remaining for the town: buildings, vegetation and props; the full 80 x 60 map; camera (pan and zoom); selectable destination buildings; ambient life. The unused meadow files stay until they are deleted deliberately.
+Done (Milestone 2, ADR-018):
+- The complete 80 x 60 terrain: all six elevation levels, river, riverbanks, cliffs, castle bases, masonry retaining walls and grass slopes, drawn as a solid block that fits the window. Roads, ramps, stairs and bridges are loaded and tested but not drawn.
+
+Remaining for the town: buildings, vegetation and props; camera (pan and zoom); selectable destination buildings; ambient life. The unused meadow files stay until they are deleted deliberately.
 
 Remaining:
 - Real destination pages (Phase 5). Until then each destination shows a placeholder panel and nothing else.

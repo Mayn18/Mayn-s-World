@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { backToFront } from './depth';
-import { TERRAIN_PATCH, tilesInPatch } from './patch';
+import { townModel } from '../terrain/town';
+
+const everyTile = townModel.terrain.levels.flatMap((row, y) => row.map((_, x) => ({ x, y })));
 
 describe('backToFront', () => {
   it('draws the tile with the smallest x + y first and the largest last', () => {
@@ -38,7 +40,7 @@ describe('backToFront', () => {
   });
 
   it('keeps every tile exactly once', () => {
-    const tiles = tilesInPatch(TERRAIN_PATCH);
+    const tiles = everyTile;
     expect(backToFront(tiles)).toHaveLength(tiles.length);
     expect(new Set(backToFront(tiles).map((t) => `${t.x},${t.y}`)).size).toBe(tiles.length);
   });
@@ -46,7 +48,7 @@ describe('backToFront', () => {
   it('always draws a tile before any tile that is south and/or east of it', () => {
     // "Behind" means smaller-or-equal x and y. A tile that is behind another
     // must be painted first, or it would wrongly cover the nearer one.
-    const sorted = backToFront(tilesInPatch(TERRAIN_PATCH));
+    const sorted = backToFront(everyTile);
     const position = new Map(sorted.map((t, i) => [`${t.x},${t.y}`, i]));
     for (const a of sorted) {
       for (const b of [
@@ -58,6 +60,24 @@ describe('backToFront', () => {
         if (later !== undefined) {
           expect(later).toBeGreaterThan(position.get(`${a.x},${a.y}`)!);
         }
+      }
+    }
+  });
+
+  it('orders all 4,800 tiles of the town, matching the terrain model', () => {
+    expect(townModel.order).toHaveLength(4800);
+    expect(townModel.order).toEqual(backToFront(everyTile));
+  });
+
+  it('never lets a taller, nearer tile be hidden by a farther one (full map)', () => {
+    // A tile's drawn shape spans from its top diamond down its two visible faces.
+    // If a tile is drawn LATER, it covers the earlier one where they overlap, so
+    // it must be the nearer one: larger x + y.
+    const position = new Map(townModel.order.map((t, i) => [`${t.x},${t.y}`, i]));
+    for (const { x, y } of townModel.order) {
+      for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [2, 0], [0, 2]]) {
+        const later = position.get(`${x + dx},${y + dy}`);
+        if (later !== undefined) expect(later).toBeGreaterThan(position.get(`${x},${y}`)!);
       }
     }
   });

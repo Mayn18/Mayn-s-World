@@ -1,7 +1,8 @@
 // Picking: which tile is under a point on the screen?
 //
-// This is the reverse of drawing, and it is what hover labels and clicks will use
-// later. For now it feeds the "tile under the cursor" readout.
+// This is the reverse of drawing, and it is what hover labels and clicks use. It
+// works against the terrain model so it sees the same surface heights the painter
+// draws, including water sitting a little below land.
 //
 // WHY NOT JUST screenToMap?
 // screenToMap answers "which map point is here, if the ground were at level L?".
@@ -14,9 +15,8 @@
 // Limitation: only the flat tops of tiles are tested. A point on a cliff face
 // returns whatever tile is visible behind it. That is fine for the readout; when
 // cliffs or buildings need to be clickable, they get their own test.
-import type { Terrain, TileCoord } from '../data/types';
-import { backToFront } from './depth';
-import { type Patch, tilesInPatch } from './patch';
+import type { TileCoord } from '../data/types';
+import type { TerrainModel } from '../terrain/model';
 import { TILE_H, TILE_W, tileCenter } from './projection';
 
 export interface PickedTile extends TileCoord {
@@ -32,19 +32,18 @@ function insideDiamond(dx: number, dy: number): boolean {
 }
 
 // sx and sy are in the same screen space that mapToScreen produces (before the
-// canvas offset is added), so the caller subtracts the patch's top-left first.
-export function pickTile(
-  terrain: Terrain,
-  patch: Patch,
-  sx: number,
-  sy: number,
-): PickedTile | null {
-  const nearestFirst = backToFront(tilesInPatch(patch)).reverse();
-  for (const tile of nearestFirst) {
-    const level = terrain.levels[tile.y]![tile.x]!;
-    const centre = tileCenter(tile, level);
+// canvas offset is added), so the caller adds the world bounds' top-left first.
+export function pickTile(model: TerrainModel, sx: number, sy: number): PickedTile | null {
+  // model.order runs far to near, so walk it backwards: nearest tile first.
+  for (let i = model.order.length - 1; i >= 0; i--) {
+    const tile = model.order[i]!;
+    const centre = tileCenter(tile, model.surface[tile.y]![tile.x]!);
     if (insideDiamond(sx - centre.sx, sy - centre.sy)) {
-      return { ...tile, level, water: terrain.water[tile.y]![tile.x]! };
+      return {
+        ...tile,
+        level: model.terrain.levels[tile.y]![tile.x]!,
+        water: model.terrain.water[tile.y]![tile.x]!,
+      };
     }
   }
   return null;
