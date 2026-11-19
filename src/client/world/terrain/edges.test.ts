@@ -57,14 +57,15 @@ describe('terrain boundaries: classification rules', () => {
     expect(new Set(kinds(levels, { roads })).size).toBe(1);
   });
 
-  it('breaks a wall where a ramp or stairs climbs', () => {
+  it('breaks a wall across the whole width of a road that climbs by ramp or stairs', () => {
+    // The road is 2 tiles wide (rows 0 and 1); row 2 is beside it, not on it.
     const levels = [[2, 1], [2, 1], [2, 1]];
-    const roads = levels.map((row) => row.map(() => true));
+    const roads = [[true, true], [true, true], [false, false]];
     const result = kinds(levels, {
       roads,
-      crossings: [{ road: 'A', kind: 'stairs', x: 0, y: 1 }],
+      crossings: [{ road: 'test', kind: 'stairs', x: 0, y: 1 }],
     });
-    expect(result).toEqual(['wall', 'slope', 'wall']);
+    expect(result).toEqual(['slope', 'slope', 'wall']);
   });
 });
 
@@ -82,9 +83,9 @@ describe('terrain boundaries: the real town against the file\'s level_edges', ()
     expect(inFile.slope + inFile.wall).toBe(285);
   });
 
-  it('pins the derived wall / slope split (129 / 156; the file says 133 / 152)', () => {
-    expect(count('wall')).toBe(129);
-    expect(count('slope')).toBe(156);
+  it('pins the derived wall / slope split (119 / 166; the file says 133 / 152)', () => {
+    expect(count('wall')).toBe(119);
+    expect(count('slope')).toBe(166);
   });
 
   it('finds the file\'s 4 riverbanks, counting land-to-water steps of different height', () => {

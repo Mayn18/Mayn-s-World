@@ -187,7 +187,7 @@ describe('parseTerrain', () => {
   it('reads roads and crossings', () => {
     const terrain = parseTerrain(
       tinyLayout({
-        roads: [{ width: 1, points: [[0.5, 0], [0.5, 2]] }],
+        roads: [{ width: 1, kind: 'path', points: [[0.5, 0], [0.5, 2]] }],
         connections: [{ road: 'A', kind: 'stairs', x: 0, y: 1 }],
       }),
     );

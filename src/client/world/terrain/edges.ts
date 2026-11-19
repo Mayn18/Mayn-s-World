@@ -16,8 +16,9 @@
 //      beside developed ground (a road, lane, path or pier within one tile of the
 //      step), the whole run is a "wall": a built retaining wall. Streets and
 //      terraces are held up with masonry. The exception is a tile where a road
-//      itself climbs (a listed ramp or stairs crossing): there the ground is a
-//      slope, so the wall is broken by the ramp.
+//      itself climbs (a ramp or stairs, across the road's whole width, see
+//      roads/crossings.ts): there the ground is a slope, so the wall is broken
+//      by the ramp.
 //   5. Any other drop of 1 -> "slope": a grass bank on open ground.
 //
 // Deciding per RUN, not per tile, keeps one terrace edge one material. Deciding
@@ -25,7 +26,7 @@
 //
 // HOW THIS COMPARES WITH THE FILE'S TOTALS (checked in edges.test.ts)
 //   castle: 96 here, 96 in the file (exact)
-//   slope + wall: 285 here, 285 in the file (exact); the split is 156 / 129 here,
+//   slope + wall: 285 here, 285 in the file (exact); the split is 166 / 119 here,
 //                 152 / 133 in the file, so rule 4 is an approximation
 //   bank: 4 steps between land and water of different heights, 4 in the file (exact)
 //   cliff: 56 here, 56 in the file (exact)
@@ -33,6 +34,7 @@
 // function (`markRetainingWalls`) so it can be changed without touching anything
 // else.
 import type { Terrain, TileCoord } from '../data/types';
+import { findCrossingSteps } from '../roads/crossings';
 
 export type EdgeKind = 'slope' | 'wall' | 'cliff' | 'castle' | 'bank' | 'cascade';
 // "skirt" faces are the cut sides of the map block itself (south and east map
@@ -82,10 +84,10 @@ export function nearRoadTiles(terrain: Terrain): boolean[][] {
   );
 }
 
-// The set of tiles where a road climbs by ramp or stairs ("x,y" strings).
-export function climbingTiles(terrain: Terrain): Set<string> {
+// The steps where a road climbs by ramp or stairs, as "x,y>direction" keys.
+export function climbingSteps(terrain: Terrain): Set<string> {
   return new Set(
-    terrain.crossings.filter((c) => c.kind !== 'bridge').map((c) => `${c.x},${c.y}`),
+    findCrossingSteps(terrain).map((s) => `${s.high.x},${s.high.y}>${s.direction}`),
   );
 }
 
@@ -97,8 +99,7 @@ const WALL_SHARE = 0.5;
 function markRetainingWalls(edges: TerrainEdge[], nearRoad: boolean[][], climbing: Set<string>) {
   const isPlainStep = (e: TerrainEdge) => e.kind === 'slope';
   const developed = (e: TerrainEdge) => nearRoad[e.high.y]![e.high.x]! || nearRoad[e.low.y]![e.low.x]!;
-  const climbs = (e: TerrainEdge) =>
-    climbing.has(`${e.high.x},${e.high.y}`) || climbing.has(`${e.low.x},${e.low.y}`);
+  const climbs = (e: TerrainEdge) => climbing.has(`${e.high.x},${e.high.y}>${e.direction}`);
 
   // A run is a row of steps that face the same way, have the same height pair and
   // lie along one straight line. Group by that line, then split at gaps.
@@ -165,6 +166,6 @@ export function findEdges(terrain: Terrain, surface: number[][]): TerrainEdge[] 
     }
   }
 
-  markRetainingWalls(edges, nearRoadTiles(terrain), climbingTiles(terrain));
+  markRetainingWalls(edges, nearRoadTiles(terrain), climbingSteps(terrain));
   return edges;
 }

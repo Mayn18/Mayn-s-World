@@ -9,6 +9,8 @@
 //
 // Only straight horizontal or vertical segments occur in the file, so anything
 // else is rejected instead of guessed at.
+import type { RoadKind, RoadTile } from './types';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -24,8 +26,21 @@ function isPoint(value: unknown): value is [number, number] {
   );
 }
 
-export function rasterizeRoads(raw: unknown, width: number, height: number): boolean[][] {
-  const tiles = Array.from({ length: height }, () => Array.from({ length: width }, () => false));
+// Which road wins where two cross: the wider, more important one.
+const PRIORITY: Record<RoadKind, number> = { main: 4, lane: 3, pier: 2, path: 1 };
+
+function readKind(value: unknown, index: number): RoadKind {
+  if (value === 'main' || value === 'lane' || value === 'path' || value === 'pier') return value;
+  throw new Error(`layout.json: roads[${index}] "kind" must be main, lane, path or pier`);
+}
+
+// Same strips as rasterizeRoads, but each tile says what kind of road it is, which
+// way it runs and what it is called, so the renderer can pave it and join
+// stairs and ramps to it. Where roads cross, the more important one wins.
+export function rasterizeRoadTiles(raw: unknown, width: number, height: number): (RoadTile | null)[][] {
+  const tiles: (RoadTile | null)[][] = Array.from({ length: height }, () =>
+    Array.from({ length: width }, () => null),
+  );
   if (!Array.isArray(raw)) {
     throw new Error('layout.json: "roads" must be a list');
   }
@@ -39,6 +54,8 @@ export function rasterizeRoads(raw: unknown, width: number, height: number): boo
       throw new Error(`layout.json: roads[${index}] needs at least two [x, y] points`);
     }
     const half = road.width / 2;
+    const kind = readKind(road.kind, index);
+    const name = typeof road.name === 'string' ? road.name : `road ${index}`;
 
     for (let i = 0; i + 1 < points.length; i++) {
       const [x1, y1] = points[i] as [number, number];
@@ -52,13 +69,21 @@ export function rasterizeRoads(raw: unknown, width: number, height: number): boo
       const xTo = x1 === x2 ? x1 + half : Math.max(x1, x2);
       const yFrom = y1 === y2 ? y1 - half : Math.min(y1, y2);
       const yTo = y1 === y2 ? y1 + half : Math.max(y1, y2);
+      const axis: 'x' | 'y' = y1 === y2 ? 'x' : 'y';
       // A tile is covered if the strip overlaps it, clamped to the map.
       for (let y = Math.max(0, Math.floor(yFrom)); y < Math.min(height, Math.ceil(yTo)); y++) {
         for (let x = Math.max(0, Math.floor(xFrom)); x < Math.min(width, Math.ceil(xTo)); x++) {
-          tiles[y]![x] = true;
+          const existing = tiles[y]![x];
+          if (!existing || PRIORITY[kind] > PRIORITY[existing.kind]) {
+            tiles[y]![x] = { kind, axis, name };
+          }
         }
       }
     }
   });
   return tiles;
+}
+
+export function rasterizeRoads(raw: unknown, width: number, height: number): boolean[][] {
+  return rasterizeRoadTiles(raw, width, height).map((row) => row.map((tile) => tile !== null));
 }

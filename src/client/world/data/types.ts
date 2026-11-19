@@ -30,6 +30,19 @@ export interface Terrain {
   // The places where a road changes level or crosses water (layout.json
   // "connections"). They mark where the ground must be walkable.
   crossings: readonly Crossing[];
+  // What each road tile is (kind, direction, name), or null, indexed [y][x].
+  roadTiles: readonly (readonly (RoadTile | null)[])[];
+}
+
+// 'main' streets are paved; 'lane' are narrower residential roads; 'path' are
+// footpaths and tracks; 'pier' are timber piers over water.
+export type RoadKind = 'main' | 'lane' | 'path' | 'pier';
+
+export interface RoadTile {
+  kind: RoadKind;
+  // The way the road runs: 'x' = east-west, 'y' = north-south.
+  axis: 'x' | 'y';
+  name: string;
 }
 
 export type CrossingKind = 'ramp' | 'stairs' | 'bridge';

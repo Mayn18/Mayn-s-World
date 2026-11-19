@@ -18,5 +18,8 @@ export function makeTerrain(levels: number[][], options: Options = {}): Terrain 
     water: options.water ?? blank(),
     roads: options.roads ?? blank(),
     crossings: options.crossings ?? [],
+    roadTiles: (options.roads ?? blank()).map((row) =>
+      row.map((on) => (on ? ({ kind: 'main', axis: 'x', name: 'test' } as const) : null)),
+    ),
   };
 }

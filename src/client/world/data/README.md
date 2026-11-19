@@ -22,7 +22,7 @@ Fields the renderer does not read yet: `buildings`, `districts`, `props`,
 `level_edges` gives only totals (slope 152, castle 96, cliff 56, wall 133, bank 4),
 not locations, so the material of each step is derived in
 `../terrain/edges.ts`. Castle (96), cliff (56), bank (4) and slope + wall (285)
-match the file exactly; the slope / wall split is 156 / 129 here against
+match the file exactly; the slope / wall split is 166 / 119 here against
 152 / 133 in the file, an approximation documented in ADR-018.
 
 ## Known gaps against the Stage 2 v2 artwork
