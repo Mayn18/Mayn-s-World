@@ -73,6 +73,7 @@ export function paintTerrain(
   palette: TerrainPalette,
   bounds: Bounds,
   roads?: RoadLayer,
+  decorate?: (ctx: CanvasRenderingContext2D, x: number, y: number) => void,
 ): void {
   ctx.save();
   ctx.translate(-bounds.left, -bounds.top);
@@ -97,6 +98,9 @@ export function paintTerrain(
       }
     }
     if (roads) paintGround(ctx, model, roads, x, y, palette);
+    // Buildings and their shadows are drawn by their own module, tile by tile in
+    // this same far-to-near order so they sort correctly against the terrain.
+    decorate?.(ctx, x, y);
   }
 
   ctx.restore();

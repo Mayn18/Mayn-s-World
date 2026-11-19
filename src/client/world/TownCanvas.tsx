@@ -6,6 +6,8 @@ import { terrainPalette } from './render/terrainPalette';
 import { type ViewTransform, fitContain, viewToContent } from './render/viewTransform';
 import { townRoadLayer } from './roads/town';
 import { townModel } from './terrain/town';
+import { REVIEW_IDS, buildScene } from './buildings/scene';
+import { townBuildings, townWalls } from './data/loader';
 import { defaultTheme, type Theme } from './themes';
 
 interface TownCanvasProps {
@@ -44,7 +46,11 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
 
   // The picture's own size and where it starts in projection space. Fixed for the
   // town terrain, so worked out once.
-  const bounds = useMemo(() => worldBounds(townModel), []);
+  const scene = useMemo(
+    () => buildScene(townModel, townBuildings, townWalls, REVIEW_IDS),
+    [],
+  );
+  const bounds = useMemo(() => worldBounds(townModel, scene.top), [scene]);
 
   const draw = useCallback(() => {
     const box = boxRef.current;
@@ -80,8 +86,10 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     // version; it simply draws into a scaled space.
     const k = view.scale * dpr;
     ctx.setTransform(k, 0, 0, k, view.offsetX * dpr, view.offsetY * dpr);
-    paintTerrain(ctx, townModel, terrainPalette(theme), bounds, townRoadLayer);
-  }, [bounds, theme]);
+    paintTerrain(ctx, townModel, terrainPalette(theme), bounds, townRoadLayer, (c, x, y) =>
+      scene.paintTile(c, x, y, theme),
+    );
+  }, [bounds, theme, scene]);
 
   // Draw once the canvas exists, and redraw whenever its box changes size. The
   // ResizeObserver covers window resizes, rotating a phone and browser UI such as

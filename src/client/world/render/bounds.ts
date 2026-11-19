@@ -20,7 +20,9 @@ export interface Bounds {
   height: number;
 }
 
-export function worldBounds(model: TerrainModel): Bounds {
+// `reachTop` is the highest point (smallest screenY) anything built on the ground
+// reaches, so tall buildings are not cut off at the top of the picture.
+export function worldBounds(model: TerrainModel, reachTop = Infinity): Bounds {
   const { width, height } = model.terrain;
   const west = mapToScreen(0, height).sx;
   const east = mapToScreen(width, 0).sx;
@@ -33,5 +35,6 @@ export function worldBounds(model: TerrainModel): Bounds {
       top = Math.min(top, mapToScreen(x, y, model.surface[y]![x]!).sy);
     }
   }
+  top = Math.min(top, reachTop);
   return { left: west, top, width: east - west, height: bottom - top };
 }

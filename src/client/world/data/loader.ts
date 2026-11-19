@@ -9,6 +9,7 @@
 // parseTerrain takes its input as an argument (instead of importing the file
 // itself) so tests can feed it deliberately broken data.
 import type { Crossing, CrossingKind, Terrain } from './types';
+import { type Building, readBuildings } from './buildings';
 import { rasterizeRoadTiles } from './roads';
 import layoutJson from './layout.json';
 import { LEVEL_PX, TILE_H, TILE_W } from '../render/projection';
@@ -124,3 +125,15 @@ export function parseTerrain(raw: unknown): Terrain {
 
 // The town's terrain, read once when this module is first imported.
 export const townTerrain: Terrain = parseTerrain(layoutJson);
+
+// The town's buildings, read once. Validated against the same map size.
+export const townBuildings: Building[] = readBuildings(
+  (layoutJson as { buildings: unknown }).buildings,
+  townTerrain.width,
+  townTerrain.height,
+);
+
+// The castle's curtain wall, as runs of tile coordinates (axis-aligned).
+export const townWalls: { points: [number, number][] }[] = (
+  layoutJson as unknown as { walls: { points: number[][] }[] }
+).walls.map((w) => ({ points: w.points.map((p) => [p[0]!, p[1]!] as [number, number]) }));

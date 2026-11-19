@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MATERIAL_NAMES,
   SCENE_COLORS,
   UI_COLORS,
   defaultTheme,
@@ -35,6 +36,14 @@ describe('theme registry', () => {
       for (const name of [...SCENE_COLORS, ...UI_COLORS]) {
         expect(theme.colors[name], `${theme.id}.${name}`).toMatch(/^#[0-9a-f]{6}$/i);
       }
+    }
+  });
+});
+
+describe('building materials', () => {
+  it('are valid #rrggbb colours in every theme', () => {
+    for (const theme of Object.values(themes)) {
+      for (const name of MATERIAL_NAMES) expect(theme.materials[name], `${theme.id}.${name}`).toMatch(/^#[0-9a-f]{6}$/i);
     }
   });
 });

@@ -61,10 +61,24 @@ export type SceneColor = (typeof SCENE_COLORS)[number];
 export type UiColor = (typeof UI_COLORS)[number];
 export type ColorName = SceneColor | UiColor;
 
+// Colours for buildings: wall and roof materials and a few accents. Each is ONE
+// base colour; the painters derive the lit, shaded and dark versions from it, the
+// same way terrain materials work, so the town keeps one restrained, flat style.
+export const MATERIAL_NAMES = [
+  // walls
+  'wallCream', 'wallSand', 'wallPlaster', 'wallBrick', 'wallStone', 'wallWhite', 'wallBlue', 'wallTimber',
+  // roofs
+  'roofRed', 'roofBrown', 'roofSlate', 'roofBlue', 'roofGreen', 'roofTeal', 'roofOrange', 'roofThatch', 'roofDark',
+  // awnings, doors and trim
+  'awnRed', 'awnGreen', 'awnBlue', 'awnYellow', 'doorWood', 'iron', 'gold',
+] as const;
+export type MaterialName = (typeof MATERIAL_NAMES)[number];
+
 export interface Theme {
   id: ThemeId;
   name: string;
   colors: Record<ColorName, string>;
+  materials: Record<MaterialName, string>;
 }
 
 // Add an id here, and an entry in `themes` below, to add a theme. TypeScript
@@ -117,6 +131,32 @@ const daytimeMeadow: Theme = {
     plank: '#f2cf8a',
     plankInk: '#2b2a33',
     focus: '#14229c',
+  },
+  materials: {
+    wallCream: '#ecdcae',
+    wallSand: '#dcc08c',
+    wallPlaster: '#e6e2ea',
+    wallBrick: '#b8573f',
+    wallStone: '#b3afc2',
+    wallWhite: '#f3efe4',
+    wallBlue: '#b3c7da',
+    wallTimber: '#6e4a2c',
+    roofRed: '#c9573f',
+    roofBrown: '#8a5832',
+    roofSlate: '#4e5169',
+    roofBlue: '#4f79aa',
+    roofGreen: '#3f8a63',
+    roofTeal: '#58a39f',
+    roofOrange: '#dc7a33',
+    roofThatch: '#cfa84f',
+    roofDark: '#353850',
+    awnRed: '#d04540',
+    awnGreen: '#3f9a68',
+    awnBlue: '#3f70b4',
+    awnYellow: '#e6b73c',
+    doorWood: '#6d4626',
+    iron: '#2d2b38',
+    gold: '#e2bb4a',
   },
 };
 
