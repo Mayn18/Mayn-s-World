@@ -19,6 +19,27 @@ export interface FaceColours {
   line: string; // masonry courses and rock strata drawn across the face
 }
 
+// Colours for everything laid over the grass: streets, lanes, tracks, the square,
+// ramps, stairs and bridges. Like the rest of the palette they are plain mixes of
+// the theme's colours, with no texture and no per-tile randomness.
+export interface RoadColours {
+  // The top of each kind of paving. Lightest to darkest: the square, the main
+  // streets, residential lanes, dirt tracks.
+  surface: Record<'plaza' | 'main' | 'lane' | 'path', string>;
+  // A thin darker line along the edge of paved ground where it meets grass.
+  kerb: string;
+  // A road climbing a bank: lit on a south face, shaded on an east face. `line` is
+  // the edge between the ramp and the wall or bank beside it.
+  rampPaved: FaceColours;
+  rampEarth: FaceColours;
+  // A flight of stairs; `line` is the lit edge of each tread.
+  stairs: FaceColours;
+  // Bridges and piers: the deck, its rail along open sides, and the side that
+  // hangs down to the water.
+  timber: { deck: string; rail: string; face: FaceColours };
+  stone: { deck: string; rail: string; face: FaceColours };
+}
+
 export interface TerrainPalette {
   // Top surface colour for each elevation level, index 0 = lowest.
   top: readonly string[];
@@ -28,6 +49,7 @@ export interface TerrainPalette {
   waterShore: string;
   wallCap: string;
   faces: Record<FaceKind, FaceColours>;
+  roads: RoadColours;
 }
 
 // Levels in layout.json go up to 5.
@@ -73,6 +95,22 @@ export function terrainPalette(theme: Theme): TerrainPalette {
   );
 
   const castleBase = mix(c.stone, c.wall, 0.4);
+
+  // Paving runs from pale stone (the square) to packed earth (tracks), all in the
+  // warm family of the theme's path colours so it reads as one restrained set.
+  const main = mix(c.path, c.wall, 0.5);
+  const lane = mix(c.path, c.pathEdge, 0.4);
+  const path = mix(c.pathEdge, c.wood, 0.25);
+  const kerb = mix(c.pathEdge, c.outline, 0.25);
+  const ramp = (base: string): FaceColours => ({
+    lit: mix(base, c.outline, 0.1),
+    shade: mix(base, c.outline, 0.3),
+    line: kerb,
+  });
+  const stairBase = mix(c.stone, c.wall, 0.55);
+  const timberBase = mix(c.wood, c.path, 0.25);
+  const stoneBridge = material(mix(c.stone, c.wall, 0.4), c.outline);
+
   return {
     top,
     water,
@@ -95,6 +133,23 @@ export function terrainPalette(theme: Theme): TerrainPalette {
       // meets the map edge.
       skirt: material(c.woodDark, c.outline),
       waterSkirt: material(mix(c.glass, c.outline, 0.3), c.outline),
+    },
+    roads: {
+      surface: { plaza: mix(c.wall, c.cloud, 0.2), main, lane, path },
+      kerb,
+      rampPaved: ramp(main),
+      rampEarth: ramp(path),
+      stairs: {
+        lit: stairBase,
+        shade: mix(stairBase, c.outline, 0.3),
+        line: mix(stairBase, c.cloud, 0.55),
+      },
+      timber: {
+        deck: timberBase,
+        rail: c.woodDark,
+        face: material(mix(c.wood, c.woodDark, 0.5), c.outline),
+      },
+      stone: { deck: main, rail: c.stone, face: stoneBridge },
     },
   };
 }

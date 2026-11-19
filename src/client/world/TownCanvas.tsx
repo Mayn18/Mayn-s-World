@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ART } from './bake/space';
+import { worldBounds } from './render/bounds';
 import { type PickedTile, pickTile } from './render/picking';
-import { townBitmap } from './townBitmap';
+import { paintTerrain } from './render/terrainPainter';
+import { terrainPalette } from './render/terrainPalette';
 import { type ViewTransform, fitContain, viewToContent } from './render/viewTransform';
+import { townRoadLayer } from './roads/town';
 import { townModel } from './terrain/town';
 import { defaultTheme, type Theme } from './themes';
 
@@ -40,10 +42,9 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
   const [hovered, setHovered] = useState<PickedTile | null>(null);
   const [unsupported, setUnsupported] = useState(false);
 
-  // The baked town and its size. Drawn once (see townBitmap.ts); everything after
-  // that is just showing the same bitmap, scaled.
-  const bitmap = useMemo(() => townBitmap(theme), [theme]);
-  const bounds = bitmap?.bounds ?? { left: 0, top: 0, width: 1, height: 1 };
+  // The picture's own size and where it starts in projection space. Fixed for the
+  // town terrain, so worked out once.
+  const bounds = useMemo(() => worldBounds(townModel), []);
 
   const draw = useCallback(() => {
     const box = boxRef.current;
@@ -79,13 +80,8 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     // version; it simply draws into a scaled space.
     const k = view.scale * dpr;
     ctx.setTransform(k, 0, 0, k, view.offsetX * dpr, view.offsetY * dpr);
-    if (!bitmap) return;
-    // Hard pixel edges when zoomed in; smooth when the picture is shrunk to fit,
-    // where nearest-neighbour would look jagged and lose detail.
-    ctx.imageSmoothingEnabled = k < ART;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bitmap.canvas, 0, 0, bounds.width, bounds.height);
-  }, [bitmap, bounds]);
+    paintTerrain(ctx, townModel, terrainPalette(theme), bounds, townRoadLayer);
+  }, [bounds, theme]);
 
   // Draw once the canvas exists, and redraw whenever its box changes size. The
   // ResizeObserver covers window resizes, rotating a phone and browser UI such as
@@ -132,7 +128,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
         ref={canvasRef}
         className="world-canvas"
         role="img"
-        aria-label={`The town's terrain, ${townModel.terrain.width} by ${townModel.terrain.height} tiles: a castle hill in the north, terraced town, cliffs, a winding river and surrounding farmland. Buildings are not drawn yet.`}
+        aria-label={`The town's terrain, ${townModel.terrain.width} by ${townModel.terrain.height} tiles: a castle hill in the north, terraced town, cliffs, a winding river and surrounding farmland, with its streets, lanes, paths, stairs and bridges. Buildings are not drawn yet.`}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => setHovered(null)}
       />

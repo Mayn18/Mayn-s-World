@@ -37,6 +37,14 @@ Each theme defines environment, palette, UI surfaces/borders, typography treatme
 
 Build one polished environment first. Architect for all six; do not deliver six incomplete scenes.
 
+## Art direction for the town
+- Clean isometric surfaces in flat, restrained colour; light from the upper left, south faces lit and east faces shaded. Elevation reads from colour and faces.
+- Detail comes from shape, silhouette and light, not from texture. No per-pixel noise, no checkerboard or repeating patterns on grass, roads or water, and no tiny contrasting specks.
+- Natural colour variation is broad and smooth (by elevation, material, light), never per tile or per pixel.
+- Roads are readable at a glance: pale paved streets and square with a thin kerb, plainer earthen lanes and tracks, simple stairs, ramps and bridges.
+- Buildings follow the same language: readable silhouettes and distinct styles with controlled detail, never covered in small marks.
+- This is the direction approved at Milestone 2 and restored by ADR-019.
+
 ## Rendering and interaction
 - Use Canvas or CSS for atmosphere where appropriate.
 - Keep actual text, links, forms, buttons and content in semantic DOM.

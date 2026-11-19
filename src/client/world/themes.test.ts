@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  RAMP_NAMES,
   SCENE_COLORS,
   UI_COLORS,
   defaultTheme,
@@ -35,21 +34,6 @@ describe('theme registry', () => {
     for (const theme of Object.values(themes)) {
       for (const name of [...SCENE_COLORS, ...UI_COLORS]) {
         expect(theme.colors[name], `${theme.id}.${name}`).toMatch(/^#[0-9a-f]{6}$/i);
-      }
-    }
-  });
-});
-
-describe('material ramps', () => {
-  it('give every ramp four valid colours that get lighter', () => {
-    for (const theme of Object.values(themes)) {
-      for (const name of RAMP_NAMES) {
-        const ramp = theme.ramps[name];
-        expect(ramp, `${theme.id}.${name}`).toHaveLength(4);
-        for (const colour of ramp) expect(colour).toMatch(/^#[0-9a-f]{6}$/i);
-        for (let i = 1; i < 4; i++) {
-          expect(luminance(ramp[i]!), `${name}[${i}]`).toBeGreaterThan(luminance(ramp[i - 1]!));
-        }
       }
     }
   });

@@ -55,7 +55,12 @@ Done (full-viewport world, ADR-017):
 - Known interim gap: there is no navigation UI until destinations become buildings, so the accessible-navigation invariant is not met on the home page for now. It must be restored when the six destination buildings are added.
 
 Done (Milestone 2, ADR-018):
-- The complete 80 x 60 terrain: all six elevation levels, river, riverbanks, cliffs, castle bases, masonry retaining walls and grass slopes, drawn as a solid block that fits the window. Roads, ramps, stairs and bridges are loaded and tested but not drawn.
+- The complete 80 x 60 terrain: all six elevation levels, river, riverbanks, cliffs, castle bases, masonry retaining walls and grass slopes, drawn as a solid block that fits the window. Roads, ramps, stairs and bridges were loaded and tested here and are drawn in the next entry.
+
+Done (Milestone 3 and its art-direction correction, ADR-019):
+- Per-tile road data (main streets, lanes, tracks, piers), ramps and stairs across the whole width of a road, bridge decks, and the paved Market Square.
+- Drawn in the Milestone 2 style: flat colour, a thin kerb on paved ground, plain stairs and ramps, timber and stone bridges. An earlier pixel-texture rendering was rejected and removed (ADR-019).
+- Waiting on the owner's approval of this look before any building artwork is started.
 
 Remaining for the town: buildings, vegetation and props; camera (pan and zoom); selectable destination buildings; ambient life. The unused meadow files stay until they are deleted deliberately.
 

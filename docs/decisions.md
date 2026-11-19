@@ -234,7 +234,23 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 
 **Drawing:** painter's algorithm in order of increasing `x + y`. For each tile the south face, east face and top are drawn. A face's bottom edge is produced by the same projection call as the lower tile's top edge, so there are no seams (tested for every step in the town). Lighting is from the upper left: south faces lit, east faces shaded. Water surfaces sit 0.4 level below land, are shaded by distance from the shore and have a pale shore line. The map is drawn as a solid block with cut faces on its south and east edges.
 
-**Not done here:** roads (rasterised and loaded, so ramps, stairs and bridges can be drawn later, but not drawn), buildings, vegetation, props, animation, camera pan and zoom. The three duplicate-door pairs in `layout.json` remain unresolved and unchanged (see `src/client/world/data/README.md`).
+**Not done here:** roads (rasterised and loaded, so ramps, stairs and bridges can be drawn later; drawn in ADR-019), buildings, vegetation, props, animation, camera pan and zoom. The three duplicate-door pairs in `layout.json` remain unresolved and unchanged (see `src/client/world/data/README.md`).
 
 **Known limits:** picking tests only the top surface of tiles, so a point on a cliff face returns the tile visible behind it. Terrain colours come from the theme, but only one theme exists.
 
+
+## ADR-019: Clean flat-shaded rendering; the baked pixel-texture pipeline is withdrawn
+
+**Status:** Accepted, pending owner review of the screenshot (Milestone 3 art-direction correction). Supersedes the rendering approach of the Milestone 3 commit `f271d36` and keeps the rest of that milestone's work.
+
+**Context:** Milestone 3 added roads, stairs, ramps and bridges by drawing the whole town into a software pixel buffer, with seeded per-pixel texture (grass speckle, cobbles, planks, strata) baked into one bitmap. On review the owner rejected the result: repetitive checkerboard grass, roads with many tiny contrasting details, noise over every surface, and a look unlike the approved Milestone 2 terrain. The approved direction is the Milestone 2 rendering: clean isometric surfaces, a restrained palette, clear elevation differences, no repeated patterns.
+
+**Decision:** the visual style is the Milestone 2 style: flat-colour polygons, one colour per material, light from the upper left, detail from shape and elevation rather than texture. The pixel buffer, the shader modules (`bake/`), the bitmap wrapper and the theme material ramps were removed. The Canvas 2D polygon painters were restored and the road work was redrawn in the same style on top of them.
+
+**Kept from Milestone 3, unchanged in behaviour:** the per-tile road data (kind, direction, name), `roads/crossings.ts` (ramps and stairs across a road's whole width, bridge decks), the wall-versus-slope rule that breaks a retaining wall where a road climbs, the terrain model, elevation and depth ordering, and their tests. The Market Square (`roads/plaza.ts`) is kept as a renderer-side decision, not data.
+
+**Drawing:** `render/roadPainter.ts`, called from the painter's far-to-near loop. A street, lane, track or the square is a flat tile top over the grass (the grass under it is not drawn, which would otherwise show as a faint line along every tile edge). Streets and the square get a thin kerb along sides that meet other ground; lanes and tracks do not. A ramp is the road colour laid over the face it climbs; stairs add a lit edge for every tread. A bridge deck sits at the height of the land with a rail on open sides and a side that hangs to the water: stone for a main street, timber otherwise. All colours are mixes of theme colours in `terrainPalette.ts`.
+
+**Trade-offs:** no texture means large flat areas, so future detail (buildings, trees, props) carries the town's richness; if more variation is wanted it should be low-frequency and smooth, never per-tile or per-pixel. The painter redraws on resize rather than showing a cached bitmap; at 4,800 tiles this is cheap, and if it ever matters a cached canvas can be added without changing the look.
+
+**Not done here:** buildings, vegetation, props. Work on them waits for the owner's approval of this direction.

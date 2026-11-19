@@ -61,3 +61,44 @@ describe('terrainPalette', () => {
     for (const colour of all) expect(colour).toMatch(/^#[0-9a-f]{6}$/);
   });
 });
+
+describe('terrainPalette roads', () => {
+  const { roads } = terrainPalette(defaultTheme);
+
+  it('paves from pale stone to packed earth: square, street, lane, track', () => {
+    const order = [roads.surface.plaza, roads.surface.main, roads.surface.lane, roads.surface.path];
+    for (let i = 1; i < order.length; i++) {
+      expect(brightness(order[i]!)).toBeLessThan(brightness(order[i - 1]!));
+    }
+  });
+
+  it('draws the kerb darker than the street it edges', () => {
+    expect(brightness(roads.kerb)).toBeLessThan(brightness(roads.surface.main));
+  });
+
+  it('lights ramps, stairs and bridge sides from the upper left, like every other face', () => {
+    for (const [name, colours] of Object.entries({
+      rampPaved: roads.rampPaved,
+      rampEarth: roads.rampEarth,
+      stairs: roads.stairs,
+      timber: roads.timber.face,
+      stone: roads.stone.face,
+    })) {
+      expect(brightness(colours.shade), name).toBeLessThan(brightness(colours.lit));
+    }
+  });
+
+  it('makes the lit edge of a tread lighter than the stair itself', () => {
+    expect(brightness(roads.stairs.line)).toBeGreaterThan(brightness(roads.stairs.lit));
+  });
+
+  it('only contains #rrggbb colours', () => {
+    const all = [
+      ...Object.values(roads.surface),
+      roads.kerb,
+      ...[roads.rampPaved, roads.rampEarth, roads.stairs, roads.timber.face, roads.stone.face].flatMap((f) => [f.lit, f.shade, f.line]),
+      roads.timber.deck, roads.timber.rail, roads.stone.deck, roads.stone.rail,
+    ];
+    for (const colour of all) expect(colour).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});
