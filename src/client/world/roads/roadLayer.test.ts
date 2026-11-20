@@ -7,12 +7,12 @@ import { buildRoadLayer, climbKey, groundKind, isPaved } from './roadLayer';
 import { townRoadLayer } from './town';
 
 describe('groundKind', () => {
-  const road = (kind: 'main' | 'lane' | 'path' | 'pier') => ({ kind, axis: 'x' as const, name: kind });
+  const road = (kind: 'main' | 'lane' | 'path' | 'track' | 'pier') => ({ kind, axis: 'x' as const, name: kind });
 
-  it('says what each kind of road on land is paved with', () => {
+  it('keeps each road hierarchy distinct on land', () => {
     const model = buildTerrainModel(
       makeTerrain([[1, 1, 1, 1, 1]], {
-        roadTiles: [[road('main'), road('lane'), road('path'), road('pier'), null]],
+        roadTiles: [[road('main'), road('lane'), road('path'), road('track'), road('pier')]],
       }),
     );
     const layer = buildRoadLayer(model);
@@ -20,8 +20,8 @@ describe('groundKind', () => {
       'main',
       'lane',
       'path',
+      'track',
       null, // a pier tile that stands on land is left as grass
-      null,
     ]);
   });
 
@@ -85,7 +85,22 @@ describe('the town road layer', () => {
       }
     }
     expect(squareTiles).toBeGreaterThan(50);
-    expect(groundKind(townModel, townRoadLayer, 38, 30)).toBe('plaza');
+    expect(groundKind(townModel, townRoadLayer, 38, 30)).toBe('main');
+    expect(groundKind(townModel, townRoadLayer, 34, 26)).toBe('plaza');
+    expect(townRoadLayer.plazaRim.flat().some(Boolean)).toBe(true);
+  });
+
+  it('carries the main streets continuously through the market square', () => {
+    for (let x = 0; x < width; x++) {
+      if (townModel.terrain.water[30]![x]!) {
+        expect(townRoadLayer.decks[30]![x], `bridge at ${x}`).toBe(true);
+      } else {
+        expect(groundKind(townModel, townRoadLayer, x, 30), `west-east at ${x}`).toBe('main');
+      }
+    }
+    for (let y = 25; y < 53; y++) {
+      expect(groundKind(townModel, townRoadLayer, 38, y), `north-south at ${y}`).toBe('main');
+    }
   });
 
   it('marks a deck wherever a road runs over water, and nowhere else', () => {

@@ -56,12 +56,12 @@ describe('streets, lanes and tracks', () => {
   });
 
   it('gives each kind of road its own colour', () => {
-    const kinds = ['main', 'lane', 'path'] as const;
-    const { polygons } = paint([[2, 2, 2]], { roadTiles: [kinds.map((k) => tile(k))] });
+    const kinds = ['main', 'lane', 'path', 'track'] as const;
+    const { polygons } = paint([[2, 2, 2, 2]], { roadTiles: [kinds.map((k) => tile(k))] });
     for (const kind of kinds) {
       expect(withColour(polygons, roads.surface[kind]), kind).toHaveLength(1);
     }
-    expect(new Set(kinds.map((k) => roads.surface[k])).size).toBe(3);
+    expect(new Set(kinds.map((k) => roads.surface[k])).size).toBe(4);
   });
 
   it('puts a kerb on every open side of a street and none between neighbouring street tiles', () => {
@@ -100,7 +100,7 @@ describe('streets, lanes and tracks', () => {
 });
 
 describe('the Market Square', () => {
-  it('is paved with its own colour, over the fountain tile', () => {
+  it('keeps the main street continuous beneath the fountain and square', () => {
     const { polygons } = (() => {
       const rec = recordingContext();
       paintTerrain(rec.ctx, townModel, palette, worldBounds(townModel), townRoadLayer);
@@ -108,10 +108,26 @@ describe('the Market Square', () => {
     })();
     const bounds = worldBounds(townModel);
     const [x, y] = [38, 30];
-    expect(groundKind(townModel, townRoadLayer, x, y)).toBe('plaza');
+    expect(groundKind(townModel, townRoadLayer, x, y)).toBe('main');
     const expected = JSON.stringify(diamond(bounds, x, y, townModel.surface[y]![x]!));
     const match = polygons.find((p) => JSON.stringify(p.points) === expected);
-    expect(match?.colour).toBe(roads.surface.plaza);
+    expect(match?.colour).toBe(roads.surface.main);
+  });
+
+  it('uses a broad perimeter course instead of a repeating tile pattern', () => {
+    const rimTiles = townRoadLayer.plazaRim.flat().filter(Boolean).length;
+    let visibleRimTiles = 0;
+    for (let y = 0; y < townModel.terrain.height; y++) {
+      for (let x = 0; x < townModel.terrain.width; x++) {
+        if (townRoadLayer.plazaRim[y]![x]! && groundKind(townModel, townRoadLayer, x, y) === 'plaza') {
+          visibleRimTiles++;
+        }
+      }
+    }
+    expect(visibleRimTiles).toBeGreaterThan(10);
+    const rec = recordingContext();
+    paintTerrain(rec.ctx, townModel, palette, worldBounds(townModel), townRoadLayer);
+    expect(withColour(rec.polygons, roads.surface.plazaEdge)).toHaveLength(visibleRimTiles);
   });
 });
 

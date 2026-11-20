@@ -35,9 +35,9 @@ export interface Terrain {
   roadTiles: readonly (readonly (RoadTile | null)[])[];
 }
 
-// 'main' streets are paved; 'lane' are narrower residential roads; 'path' are
-// footpaths and tracks; 'pier' are timber piers over water.
-export type RoadKind = 'main' | 'lane' | 'path' | 'pier';
+// 'main' streets are paved; 'lane' are secondary streets; paths and tracks are
+// unpaved; piers cross water.
+export type RoadKind = 'main' | 'lane' | 'path' | 'track' | 'pier';
 
 export interface RoadTile {
   kind: RoadKind;

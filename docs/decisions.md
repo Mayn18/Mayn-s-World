@@ -293,6 +293,10 @@ for the castle hill; `layout.original.json` is the unmodified export and the way
   were added in restrained numbers beside homes, the market, the harbour, farms and the castle
   wards. The map file now holds 130 props.
 
-Not yet done from the redesign brief: road hierarchy and market refinement, and forest, field
-and riverbank redistribution.
+Stage 3 completed the road hierarchy and public-space refinement: the main market street now
+continues across the square, the plaza has a broad perimeter paving course, and farm tracks
+have their own surface. The castle approach, district streets and existing bridge crossings
+remain connected without moving buildings.
+
+Stage 4 (forest, field and riverbank redistribution) remains.
 

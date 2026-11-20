@@ -23,9 +23,9 @@ export interface FaceColours {
 // ramps, stairs and bridges. Like the rest of the palette they are plain mixes of
 // the theme's colours, with no texture and no per-tile randomness.
 export interface RoadColours {
-  // The top of each kind of paving. Lightest to darkest: the square, the main
-  // streets, residential lanes, dirt tracks.
-  surface: Record<'plaza' | 'main' | 'lane' | 'path', string>;
+  // The top of each kind of paving. Lightest to darkest: square, streets, lanes,
+  // footpaths and narrow farm tracks.
+  surface: Record<'plaza' | 'plazaEdge' | 'main' | 'lane' | 'path' | 'track', string>;
   // A thin darker line along the edge of paved ground where it meets grass.
   kerb: string;
   // A road climbing a bank: lit on a south face, shaded on an east face. `line` is
@@ -106,6 +106,7 @@ export function terrainPalette(theme: Theme): TerrainPalette {
   const main = mix(c.path, c.wall, 0.5);
   const lane = mix(c.path, c.pathEdge, 0.4);
   const path = mix(c.pathEdge, c.wood, 0.25);
+  const track = mix(path, c.woodDark, 0.2);
   const kerb = mix(c.pathEdge, c.outline, 0.25);
   const ramp = (base: string): FaceColours => ({
     lit: mix(base, c.outline, 0.1),
@@ -140,7 +141,14 @@ export function terrainPalette(theme: Theme): TerrainPalette {
       waterSkirt: material(mix(c.glass, c.outline, 0.3), c.outline),
     },
     roads: {
-      surface: { plaza: mix(c.wall, c.cloud, 0.2), main, lane, path },
+      surface: {
+        plaza: mix(c.wall, c.cloud, 0.2),
+        plazaEdge: mix(mix(c.wall, c.cloud, 0.2), lane, 0.16),
+        main,
+        lane,
+        path,
+        track,
+      },
       kerb,
       rampPaved: ramp(main),
       rampEarth: ramp(path),

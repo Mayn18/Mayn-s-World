@@ -9,7 +9,7 @@
 import type { RoadKind } from '../data/types';
 import type { TerrainModel } from '../terrain/model';
 import { type CrossingStep, deckTiles, findCrossingSteps } from './crossings';
-import { plazaTiles } from './plaza';
+import { plazaRimTiles, plazaTiles } from './plaza';
 
 // What a land tile can be paved with. The Market Square is not a road in the data
 // file; it is a paved area around the fountain (see plaza.ts).
@@ -25,6 +25,8 @@ export interface RoadLayer {
   decks: readonly (readonly boolean[])[];
   // True for the paved Market Square on land. Indexed [y][x].
   plaza: readonly (readonly boolean[])[];
+  // The broad border course around the square, giving its paving restrained variation.
+  plazaRim: readonly (readonly boolean[])[];
 }
 
 export function climbKey(x: number, y: number, side: ClimbSide): string {
@@ -39,7 +41,12 @@ export function buildRoadLayer(model: TerrainModel): RoadLayer {
     if (step.direction === 'S') climbs.set(climbKey(step.high.x, step.high.y, 'south'), step);
     if (step.direction === 'E') climbs.set(climbKey(step.high.x, step.high.y, 'east'), step);
   }
-  return { climbs, decks: deckTiles(model.terrain), plaza: plazaTiles(model) };
+  return {
+    climbs,
+    decks: deckTiles(model.terrain),
+    plaza: plazaTiles(model),
+    plazaRim: plazaRimTiles(model),
+  };
 }
 
 // What a LAND tile is paved with, or null for plain ground. Water tiles are never
@@ -47,10 +54,10 @@ export function buildRoadLayer(model: TerrainModel): RoadLayer {
 // happens to stand on land is left as grass.
 export function groundKind(model: TerrainModel, layer: RoadLayer, x: number, y: number): GroundKind | null {
   if (model.terrain.water[y]?.[x] !== false) return null;
-  if (layer.plaza[y]?.[x]) return 'plaza';
   const road = model.terrain.roadTiles[y]?.[x];
-  if (!road || road.kind === 'pier') return null;
-  return road.kind;
+  if (road && road.kind !== 'pier') return road.kind;
+  if (layer.plaza[y]?.[x]) return 'plaza';
+  return null;
 }
 
 // Streets and the square are laid with stone and get a kerb; lanes and tracks are

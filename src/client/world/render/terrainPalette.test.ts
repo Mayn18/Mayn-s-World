@@ -65,11 +65,13 @@ describe('terrainPalette', () => {
 describe('terrainPalette roads', () => {
   const { roads } = terrainPalette(defaultTheme);
 
-  it('paves from pale stone to packed earth: square, street, lane, track', () => {
-    const order = [roads.surface.plaza, roads.surface.main, roads.surface.lane, roads.surface.path];
+  it('paves from pale stone to packed earth across every road type', () => {
+    const order = [roads.surface.plaza, roads.surface.main, roads.surface.lane, roads.surface.path, roads.surface.track];
     for (let i = 1; i < order.length; i++) {
       expect(brightness(order[i]!)).toBeLessThan(brightness(order[i - 1]!));
     }
+    expect(brightness(roads.surface.plazaEdge)).toBeLessThan(brightness(roads.surface.plaza));
+    expect(brightness(roads.surface.plazaEdge)).toBeGreaterThan(brightness(roads.surface.main));
   });
 
   it('draws the kerb darker than the street it edges', () => {

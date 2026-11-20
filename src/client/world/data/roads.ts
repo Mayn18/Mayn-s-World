@@ -27,11 +27,11 @@ function isPoint(value: unknown): value is [number, number] {
 }
 
 // Which road wins where two cross: the wider, more important one.
-const PRIORITY: Record<RoadKind, number> = { main: 4, lane: 3, pier: 2, path: 1 };
+const PRIORITY: Record<RoadKind, number> = { main: 5, lane: 4, pier: 3, path: 2, track: 1 };
 
 function readKind(value: unknown, index: number): RoadKind {
-  if (value === 'main' || value === 'lane' || value === 'path' || value === 'pier') return value;
-  throw new Error(`layout.json: roads[${index}] "kind" must be main, lane, path or pier`);
+  if (value === 'main' || value === 'lane' || value === 'path' || value === 'track' || value === 'pier') return value;
+  throw new Error(`layout.json: roads[${index}] "kind" must be main, lane, path, track or pier`);
 }
 
 // Same strips as rasterizeRoads, but each tile says what kind of road it is, which

@@ -83,9 +83,9 @@ describe('terrain boundaries: the real town against the file\'s level_edges', ()
     expect(inFile.slope + inFile.wall).toBe(285);
   });
 
-  it('pins the derived wall / slope split (119 / 166; the file says 133 / 152)', () => {
-    expect(count('wall')).toBe(119);
-    expect(count('slope')).toBe(166);
+  it('pins the derived wall / slope split (127 / 158; the file says 133 / 152)', () => {
+    expect(count('wall')).toBe(127);
+    expect(count('slope')).toBe(158);
   });
 
   it('finds the file\'s 4 riverbanks, counting land-to-water steps of different height', () => {

@@ -88,7 +88,11 @@ export function paintGround(
   if (!kind) return;
 
   const level = model.surface[y]![x]!;
-  fillPolygon(ctx, tileCorners(x, y, level), palette.roads.surface[kind]);
+  const surface =
+    kind === 'plaza' && layer.plazaRim[y]?.[x]
+      ? palette.roads.surface.plazaEdge
+      : palette.roads.surface[kind];
+  fillPolygon(ctx, tileCorners(x, y, level), surface);
 
   // A kerb along every side of paved ground that borders anything else.
   if (isPaved(kind)) {

@@ -69,6 +69,19 @@ describe('rasterizeRoadTiles', () => {
     expect(tiles[0]![0]).toBeNull();
   });
 
+  it('keeps a farm track below a dirt path in the road hierarchy', () => {
+    const tiles = rasterizeRoadTiles(
+      [
+        { name: 'Track', width: 1, kind: 'track', points: [[0, 1.5], [4, 1.5]] },
+        { name: 'Footpath', width: 1, kind: 'path', points: [[2.5, 0], [2.5, 3]] },
+      ],
+      5,
+      3,
+    );
+    expect(tiles[1]![0]).toEqual({ kind: 'track', axis: 'x', name: 'Track' });
+    expect(tiles[1]![2]).toEqual({ kind: 'path', axis: 'y', name: 'Footpath' });
+  });
+
   it('rejects an unknown kind', () => {
     expect(() => rasterizeRoadTiles([{ width: 1, kind: 'motorway', points: [[0, 0], [1, 0]] }], 4, 4)).toThrow('kind');
   });

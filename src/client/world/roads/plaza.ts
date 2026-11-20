@@ -10,8 +10,8 @@ import type { TerrainModel } from '../terrain/model';
 export const PLAZA_CENTRE = { x: 38.5, y: 30.5 };
 // How far the square reaches in tiles. A squarish "superellipse" (rounded
 // rectangle) is used so the corners are paved but not boxy.
-const PLAZA_RX = 6.8;
-const PLAZA_RY = 5.2;
+const PLAZA_RX = 7.2;
+const PLAZA_RY = 5.6;
 
 export function isPlaza(x: number, y: number): boolean {
   const dx = Math.abs(x + 0.5 - PLAZA_CENTRE.x) / PLAZA_RX;
@@ -23,5 +23,22 @@ export function isPlaza(x: number, y: number): boolean {
 export function plazaTiles(model: TerrainModel): boolean[][] {
   return model.terrain.levels.map((row, y) =>
     row.map((_, x) => isPlaza(x, y) && !model.terrain.water[y]![x]!),
+  );
+}
+
+// The outer course is one tile deep and follows the square's rounded perimeter.
+export function plazaRimTiles(model: TerrainModel): boolean[][] {
+  const inside = plazaTiles(model);
+  return inside.map((row, y) =>
+    row.map(
+      (tile, x) =>
+        tile &&
+        [
+          [0, -1],
+          [1, 0],
+          [0, 1],
+          [-1, 0],
+        ].some(([dx, dy]) => !inside[y + dy!]?.[x + dx!]),
+    ),
   );
 }

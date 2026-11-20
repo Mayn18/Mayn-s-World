@@ -54,7 +54,7 @@ describe('townTerrain: all 80 x 60 tiles are accounted for', () => {
   });
 
   it('reads every road tile the file describes (924, counted after the castle redesign)', () => {
-    expect(townTerrain.roads.flat().filter(Boolean)).toHaveLength(924);
+    expect(townTerrain.roads.flat().filter(Boolean)).toHaveLength(949);
   });
 
   it('reads all 32 crossings: 17 ramps, 9 stairs and 6 bridges', () => {

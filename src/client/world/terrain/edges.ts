@@ -13,7 +13,7 @@
 //   3. Drop of 1, and either tile is level 4 or higher
 //                          -> "castle": the masonry base of the castle hill.
 //   4. Drop of 1 along a continuous straight run: if at least half of the run lies
-//      beside developed ground (a road, lane, path or pier within one tile of the
+//      beside developed ground (a road, lane, path, track or pier within one tile of the
 //      step), the whole run is a "wall": a built retaining wall. Streets and
 //      terraces are held up with masonry. The exception is a tile where a road
 //      itself climbs (a ramp or stairs, across the road's whole width, see
