@@ -274,3 +274,21 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 
 **Not done yet:** the waterfall and mill race of detail-4, animation of smoke, sails and water, cached rendering (the whole town redraws on resize, about 2,500 trees and 96 buildings), real destination links over the canvas.
 
+## ADR-021 — Town redesign: castle hill and building families
+**Status:** Accepted (branch `feat/town-world-redesign`)
+
+The owner authorised a substantial redesign of the town's geography. `layout.json` was edited
+for the castle hill; `layout.original.json` is the unmodified export and the way back.
+
+- The castle stands on a two-level hill (outer ward level 5, inner ward level 6) above the
+  town terraces at level 3, with level 4 shelves for the barbican and the postern. The
+  terrain palette now has colours for levels 0 to 7; levels 0 to 5 are unchanged.
+- Housing is chosen from three families (wealthy, merchant, ordinary) by district, size and
+  building id, using the new appearance features `groundWall`, `jetty`, `quoins` and
+  `balcony`. The six destination buildings keep their own recipes.
+- Surface detail still comes from geometry (courses, battered feet, corbels, crowns), never
+  from texture (ADR-019).
+
+Not yet done from the redesign brief: road hierarchy and market refinement, forest, field and
+riverbank redistribution, and props and harbour life.
+
