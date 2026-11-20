@@ -62,6 +62,11 @@ Done (Milestone 3 and its art-direction correction, ADR-019):
 - Drawn in the Milestone 2 style: flat colour, a thin kerb on paved ground, plain stairs and ramps, timber and stone bridges. An earlier pixel-texture rendering was rejected and removed (ADR-019).
 - Waiting on the owner's approval of this look before any building artwork is started.
 
+Done (Milestone 4, town art: castle, buildings, vegetation and props, ADR-020):
+- All 96 building footprints are drawn with designed looks: round-tower castle, six destination buildings, houses, shops, farm and harbour buildings, windmill, fountain, stalls and bandstand.
+- A decor layer adds forests, lawn trees, fences, crop fields, garden beds, props, boats, sheep and villagers.
+- Not yet: waterfall and mill race, animation, destination links, cached drawing.
+
 Remaining for the town: buildings, vegetation and props; camera (pan and zoom); selectable destination buildings; ambient life. The unused meadow files stay until they are deleted deliberately.
 
 Remaining:

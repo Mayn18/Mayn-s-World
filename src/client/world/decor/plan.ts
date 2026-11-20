@@ -76,9 +76,13 @@ export function forestAt(x: number, y: number, width: number, height: number): F
   if (x <= 3) {
     density = Math.max(density, 0.9);
     conifers = 0.3;
-  } else if (x <= 6 && y >= 14) {
-    density = Math.max(density, 0.7);
+  } else if (x <= 9 && y >= 14 && y <= 46) {
+    // Woods fill the strip west of the terraces, thinning toward the town.
+    density = Math.max(density, x <= 6 ? 0.78 : 0.5);
     conifers = 0.32;
+  } else if (x <= 12 && y >= 47) {
+    density = Math.max(density, 0.3);
+    conifers = 0.25;
   } else if (x <= 5) {
     density = Math.max(density, 0.65);
     conifers = 0.4;

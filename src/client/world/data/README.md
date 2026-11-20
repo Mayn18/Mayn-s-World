@@ -14,8 +14,8 @@ Roads are rasterised to tiles (`roads.ts`) and connections are read, but neither
 is drawn yet; they are used to decide which terrain steps are retaining walls
 and which are climbable slopes. `level_edges` is compared with in tests only.
 
-Fields the renderer does not read yet: `buildings`, `districts`, `props`,
-`yards`, `fences`, `walls`, `vegetation`, `field_types`, `checks`.
+Fields the renderer reads: `heights`, `water`, `roads`, `connections`, `buildings`, `walls`, `props`,
+`yards`, `fences`, `vegetation` (willows and reeds) and `field_types` (`data/decor.ts`). Not read: `districts`, `checks`.
 
 ## Terrain boundaries are derived
 

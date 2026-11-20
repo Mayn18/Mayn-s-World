@@ -94,3 +94,9 @@ Use pixel fonts selectively for headings, labels and decorative elements. Use a 
 
 ## Explicit exclusions
 No combat, inventory, character stats, unrelated quests, multiplayer, complex physics, mandatory character movement or decorative interaction that makes navigation harder.
+
+## The built town (ADR-020)
+The town now follows the Stage 2 v2 aerial: a castle on the northern hill with round towers and cone roofs, a market square with a fountain and four striped stalls, terraces of varied houses in the west, a wharf and boats on the river, farmland, pasture and a windmill in the south-east, and forests framing the north, north-east and west. Reference screenshots of the build are in `docs/screenshots/`.
+
+Rules for adding to it: architectural variety comes from silhouette, roof shape and colour, floors, wall material, chimneys and one or two details, never from texture. Keep lawns open: trees are sparse on town lawns and dense only in the forest zones. Everything is lit from the upper left and its shadow falls to the lower right.
+

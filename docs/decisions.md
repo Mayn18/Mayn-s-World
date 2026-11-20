@@ -254,3 +254,23 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 **Trade-offs:** no texture means large flat areas, so future detail (buildings, trees, props) carries the town's richness; if more variation is wanted it should be low-frequency and smooth, never per-tile or per-pixel. The painter redraws on resize rather than showing a cached bitmap; at 4,800 tiles this is cheap, and if it ever matters a cached canvas can be added without changing the look.
 
 **Not done here:** buildings, vegetation, props. Work on them waits for the owner's approval of this direction.
+
+
+## ADR-020: The town is built from the Stage 2 v2 references: round towers, specialised buildings, a decor layer
+
+**Status:** Accepted, pending owner review of the screenshots in `docs/screenshots/`. Builds on ADR-016, ADR-017 and ADR-019; the terrain and road painters and `layout.json` (byte-identical, sha256 `e81bf53d...1355`) are untouched.
+
+**Context:** the first building pass drew every building as boxes with roofs and the castle as square towers with blue pyramid roofs; there were no trees, props or fields. Compared with the approved aerial and the five close-ups, the castle was wrong (the reference has round towers with terracotta, brown and slate cones), a dozen kinds (windmill, mill, barns, chapel, observatory, stalls, fountain, bandstand, market, granary, boathouse, town gates) fell back to a generic house, and the countryside was empty.
+
+**Decision:**
+- Castle: towers and corner turrets are cylinders with cone roofs (`buildings/solids.ts`), each tower with its own roof colour; the keep has a recessed storey under a slate hip roof; the gatehouses have an iron portcullis and slate roofs. The four gates inside the town (ids 27, 28, 33, 34) are pale round towers with slate cones, as in the aerial.
+- Specialised buildings: the barn, farm, granary, boathouse, chapel, observatory, mill and fish market are new recipes in `styles.ts` (with two new extras, `barnDoor` and `wheel`). The windmill, fountain, stalls and bandstand are not boxes, so they have small painters in `buildings/specials.ts`.
+- Environment: a new `decor/` layer. `data/decor.ts` reads the props, yards, fences, crop fields, willows and reeds already in `layout.json`; `decor/plan.ts` places forests, lawn trees, rocks and villagers from rules read off the aerial (dense conifer forest north and north-east, broadleaf woods on the west edge, open eastern meadow, sparse lawn trees); `decor/plants.ts` and `decor/props.ts` draw them; `decor/layer.ts` hands each tile its ground items (crop rows, garden beds) before buildings and its standing items (fences, props, plants, figures) after them.
+- Depth: unchanged. Everything is painted when the far-to-near loop reaches its tile; buildings still anchor at their south-east tile; plants within a tile are sorted by their south position.
+
+**Rules kept:** every colour comes from the theme (three theme colours were added to the building palette, no hex values in painters); no texture or noise (crop rows are thin lines, forests are flat-shaded shapes); placement is a hash of the tile, so the town is identical on every load.
+
+**Interpretations to confirm:** `field_types` codes are not named in the file. They were matched to the aerial: 1 wheat, 2 furrowed crops, 3 straw, 4 pasture (fenced, with the six sheep). The forest zones and the town-gate towers are the renderer's reading of the aerial.
+
+**Not done yet:** the waterfall and mill race of detail-4, animation of smoke, sails and water, cached rendering (the whole town redraws on resize, about 2,500 trees and 96 buildings), real destination links over the canvas.
+
