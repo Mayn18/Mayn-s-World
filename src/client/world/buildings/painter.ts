@@ -151,6 +151,26 @@ function paintWalls(
     fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, 0, H), lit ? wall.lit : wall.shade);
     // A pale lip along the top and a shaded strip under the eaves give the wall depth.
     fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, H - 2.2, H), lit ? wall.shade : wall.dark);
+    // A ground floor of another material, with a beam or sill line where the floors above begin.
+    const gwTop = pl + fpx;
+    if (app.groundWall && vol.floors > 1) {
+      const gw = pal.m[app.groundWall];
+      fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, 0, gwTop), lit ? gw.lit : gw.shade);
+      strokeLine(ctx, wallPoint(o, vol, face, lo, gwTop), wallPoint(o, vol, face, hi, gwTop), lit ? gw.dark : gw.dark, 0.9);
+    }
+    if (app.jetty && vol.floors > 1) {
+      fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, gwTop - 0.4, gwTop + 1.8), lit ? timber.lit : timber.shade);
+      fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, gwTop - 1.4, gwTop - 0.4), lit ? timber.dark : timber.dark);
+    }
+    if (app.quoins) {
+      // Dressed corner stones, alternately long and short.
+      for (let z = pl, i = 0; z < H - 2.2; z += 4, i++) {
+        const w = i % 2 === 0 ? 0.13 : 0.08;
+        const top = Math.min(z + 4, H - 2.2);
+        fillPolygon(ctx, wallQuad(o, vol, face, lo, lo + w, z, top), lit ? stone.light : stone.lit);
+        fillPolygon(ctx, wallQuad(o, vol, face, hi - w, hi, z, top), lit ? stone.light : stone.lit);
+      }
+    }
     if (pl > 0) fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, 0, pl), lit ? stone.lit : stone.shade);
 
     const doorOnFace = doorHere && door && door.face === face ? door : null;
@@ -163,8 +183,9 @@ function paintWalls(
         strokeLine(ctx, wallPoint(o, vol, face, lo, pl + f * fpx), wallPoint(o, vol, face, hi, pl + f * fpx), line, 1.2);
       }
       const edges = [lo, ...centres.slice(0, -1).map((c, i) => (c + centres[i + 1]!) / 2), hi];
+      const postFrom = app.groundWall && vol.floors > 1 ? gwTop : pl;
       for (const u of edges) {
-        strokeLine(ctx, wallPoint(o, vol, face, u, pl), wallPoint(o, vol, face, u, H - 2.2), line, 1.2);
+        strokeLine(ctx, wallPoint(o, vol, face, u, postFrom), wallPoint(o, vol, face, u, H - 2.2), line, 1.2);
       }
     }
 
@@ -195,6 +216,18 @@ function paintWalls(
 
     // The door.
     if (doorOnFace) paintDoor(ctx, o, vol, face, doorOnFace.u, app, pal, pl);
+
+    // A balcony over the door: a slab on the face with a rail and balusters.
+    if (app.balcony && doorOnFace && lit && vol.floors > 1) {
+      const u = doorOnFace.u;
+      const z = pl + fpx;
+      const slab = [at(o, u - 0.62, vol.y1, z - 1.6), at(o, u + 0.62, vol.y1, z - 1.6), at(o, u + 0.62, vol.y1 + 0.22, z - 1.6), at(o, u - 0.62, vol.y1 + 0.22, z - 1.6)];
+      fillPolygon(ctx, [at(o, u - 0.62, vol.y1 + 0.22, z - 1.6), at(o, u + 0.62, vol.y1 + 0.22, z - 1.6), at(o, u + 0.62, vol.y1 + 0.22, z), at(o, u - 0.62, vol.y1 + 0.22, z)], stone.lit);
+      fillPolygon(ctx, slab, stone.light);
+      const rail = pal.m.iron;
+      strokeLine(ctx, at(o, u - 0.62, vol.y1 + 0.2, z + 4), at(o, u + 0.62, vol.y1 + 0.2, z + 4), rail.lit, 0.9);
+      for (let k = 0; k <= 6; k++) strokeLine(ctx, at(o, u - 0.62 + (1.24 * k) / 6, vol.y1 + 0.2, z), at(o, u - 0.62 + (1.24 * k) / 6, vol.y1 + 0.2, z + 4), rail.dark, 0.6);
+    }
   }
 }
 

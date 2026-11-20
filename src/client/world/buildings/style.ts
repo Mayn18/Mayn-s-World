@@ -59,4 +59,13 @@ export interface Appearance {
   // Striped awning over the ground floor, or null.
   awning: MaterialName | null;
   extras: Extra[];
+  // Architectural features that distinguish building families (all optional).
+  // Ground floor in a different material from the floors above (a stone shop under timber).
+  groundWall?: MaterialName;
+  // Upper floors overhang the street: a projecting beam at the first floor.
+  jetty?: boolean;
+  // Dressed stone corners.
+  quoins?: boolean;
+  // A balcony over the door.
+  balcony?: boolean;
 }
