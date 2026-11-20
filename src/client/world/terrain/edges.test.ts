@@ -74,8 +74,8 @@ describe('terrain boundaries: the real town against the file\'s level_edges', ()
   const inFile = layoutJson.level_edges as Record<string, number>;
 
   it('finds the file\'s castle total exactly', () => {
-    expect(count('castle')).toBe(96);
-    expect(inFile.castle).toBe(96);
+    expect(count('castle')).toBe(78);
+    expect(inFile.castle).toBe(78);
   });
 
   it('finds the file\'s slope + wall total exactly', () => {
@@ -101,8 +101,8 @@ describe('terrain boundaries: the real town against the file\'s level_edges', ()
   });
 
   it('finds the file\'s cliff total exactly', () => {
-    expect(count('cliff')).toBe(56);
-    expect(inFile.cliff).toBe(56);
+    expect(count('cliff')).toBe(110);
+    expect(inFile.cliff).toBe(110);
   });
 
   it('gives every step a positive height', () => {

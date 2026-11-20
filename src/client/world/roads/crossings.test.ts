@@ -7,7 +7,7 @@ describe('findCrossingSteps (the real town)', () => {
 
   it('finds steps for every listed ramp and stairs', () => {
     const listed = townTerrain.crossings.filter((c) => c.kind !== 'bridge');
-    expect(listed).toHaveLength(23);
+    expect(listed).toHaveLength(26);
     for (const c of listed) {
       const covered = steps.some(
         (s) =>

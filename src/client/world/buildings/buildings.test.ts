@@ -79,8 +79,8 @@ describe('depth order', () => {
       }
     }
   });
-  it('places every one of the 96 footprints on its own terrain level', () => {
-    expect(scene.placements).toHaveLength(96);
+  it('places every one of the 102 footprints on its own terrain level', () => {
+    expect(scene.placements).toHaveLength(102);
     for (const p of scene.placements) expect(p.origin.level).toBe(townModel.terrain.levels[p.building.y]![p.building.x]);
   });
 });

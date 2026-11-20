@@ -25,12 +25,12 @@ function brightness(hex: string): number {
 describe('terrainPalette', () => {
   const palette = terrainPalette(defaultTheme);
 
-  it('has a top colour for each of the six levels', () => {
-    expect(palette.top).toHaveLength(6);
+  it('has a top colour for each of the eight levels', () => {
+    expect(palette.top).toHaveLength(8);
   });
 
   it('gives every level its own colour, and higher ground is never darker', () => {
-    expect(new Set(palette.top).size).toBe(6);
+    expect(new Set(palette.top).size).toBe(8);
     for (let level = 1; level < 6; level++) {
       expect(brightness(palette.top[level]!)).toBeGreaterThan(brightness(palette.top[level - 1]!));
     }

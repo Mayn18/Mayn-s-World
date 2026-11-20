@@ -53,7 +53,11 @@ export interface TerrainPalette {
 }
 
 // Levels in layout.json go up to 5.
-const LEVEL_COUNT = 6;
+// Colours exist for levels 0 to 5 as approved at Milestone 2, plus the castle hill's higher
+// levels, which continue the same ramp towards the wall colour. Missing entries would leave
+// the canvas fill unchanged and show whatever was drawn last.
+const BASE_LEVELS = 6;
+const LEVEL_COUNT = 8;
 export const WATER_STEPS = 4;
 
 function parseHex(hex: string): [number, number, number] {
@@ -83,9 +87,10 @@ export function terrainPalette(theme: Theme): TerrainPalette {
   // Lowland is a deeper, lusher green; the highest ground is paler and drier.
   const lowest = mix(c.grassDark, c.leafDark, 0.3);
   const highest = mix(c.grassLight, c.wall, 0.35);
-  const top = Array.from({ length: LEVEL_COUNT }, (_, level) =>
-    mix(lowest, highest, level / (LEVEL_COUNT - 1)),
-  );
+  const top = Array.from({ length: LEVEL_COUNT }, (_, level) => {
+    const ground = mix(lowest, highest, Math.min(level, BASE_LEVELS - 1) / (BASE_LEVELS - 1));
+    return level < BASE_LEVELS ? ground : mix(ground, c.wall, 0.1 * (level - BASE_LEVELS + 1));
+  });
 
   // Pale at the shore, deeper towards the middle of the river.
   const shallow = mix(c.glass, c.cloud, 0.3);

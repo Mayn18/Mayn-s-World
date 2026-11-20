@@ -16,7 +16,7 @@ const plan = planDecor(townModel, townRoadLayer, townBuildings, townWalls, townD
 
 describe('readDecor', () => {
   it('reads every prop, yard and fence in the map file', () => {
-    expect(townDecor.props).toHaveLength(59);
+    expect(townDecor.props).toHaveLength(61);
     expect(townDecor.yards).toHaveLength(17);
     expect(townDecor.fences).toHaveLength(3);
     expect(townDecor.fields).toHaveLength(60);
@@ -136,7 +136,7 @@ describe('the whole town paints', () => {
   it('runs every building, plant, prop and fence painter on every tile without error', () => {
     const decor = buildDecorLayer(townModel, townRoadLayer, townBuildings, townWalls, townDecor);
     const scene = buildScene(townModel, townBuildings, townWalls, undefined, decor);
-    expect(scene.placements).toHaveLength(96);
+    expect(scene.placements).toHaveLength(102);
     for (const { x, y } of townModel.order) scene.paintTile(ctx, x, y, defaultTheme);
     expect(counts.fill).toBeGreaterThan(5000);
     expect(counts.ellipse).toBeGreaterThan(1000);

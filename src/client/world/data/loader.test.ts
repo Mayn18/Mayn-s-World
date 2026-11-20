@@ -23,10 +23,10 @@ describe('townTerrain (the real layout.json)', () => {
     expect(townTerrain.water.every((row) => row.length === 80)).toBe(true);
   });
 
-  it('uses elevation levels 0 to 5', () => {
+  it('uses elevation levels 0 to 6', () => {
     const all = townTerrain.levels.flat();
     expect(Math.min(...all)).toBe(0);
-    expect(Math.max(...all)).toBe(5);
+    expect(Math.max(...all)).toBe(6);
   });
 
   it('matches known tiles in the file (x, y)', () => {
@@ -53,14 +53,14 @@ describe('townTerrain: all 80 x 60 tiles are accounted for', () => {
     expect(water).toBe(361);
   });
 
-  it('reads every road tile the file describes (961, counted by an independent script)', () => {
-    expect(townTerrain.roads.flat().filter(Boolean)).toHaveLength(961);
+  it('reads every road tile the file describes (924, counted after the castle redesign)', () => {
+    expect(townTerrain.roads.flat().filter(Boolean)).toHaveLength(924);
   });
 
-  it('reads all 29 crossings: 16 ramps, 7 stairs and 6 bridges', () => {
+  it('reads all 32 crossings: 17 ramps, 9 stairs and 6 bridges', () => {
     const count = (kind: string) => townTerrain.crossings.filter((c) => c.kind === kind).length;
-    expect(townTerrain.crossings).toHaveLength(29);
-    expect([count('ramp'), count('stairs'), count('bridge')]).toEqual([16, 7, 6]);
+    expect(townTerrain.crossings).toHaveLength(32);
+    expect([count('ramp'), count('stairs'), count('bridge')]).toEqual([17, 9, 6]);
   });
 });
 

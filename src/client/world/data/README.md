@@ -4,11 +4,22 @@
 grid, elevation, water, roads, buildings and their footprints, connections,
 props, fences, walls and districts.
 
-**Do not edit it without the owner's approval.** It was copied unmodified from the
-Stage 2 design export. `loader.ts` validates what the renderer uses (today the
+**Do not edit it without the owner's approval.** The owner authorised the town redesign on
+the `feat/town-world-redesign` branch (see below). `layout.original.json` is the untouched
+Stage 2 export and the way back: copy it over `layout.json` to undo the redesign.
+`loader.ts` validates what the renderer uses (today the
 grid size, tile proportions, `heights`, `water`, `roads` and `connections`) and
 refuses anything that does not match. Visual detail the file does not contain belongs in separate
 renderer-side files keyed to it, never in the JSON.
+
+## Redesign changes (branch `feat/town-world-redesign`)
+
+- Stage 1, castle hill: the outer ward is raised to level 5 and an inner ward to level 6, with
+  level 4 shelves for the barbican and the postern. Walls now stand on the hill edge. New
+  buildings 96 to 101 (North Tower, two Barbican Towers, two Keep Gate Towers, Barracks,
+  Storehouse); building 80 was removed to make room for the barbican. Castle Road now runs
+  straight down from the gate; Keep Steps and Ward Walk are new. `level_edges` castle and
+  cliff totals were updated to the new derived counts (78 and 110).
 
 Roads are rasterised to tiles (`roads.ts`) and connections are read, but neither
 is drawn yet; they are used to decide which terrain steps are retaining walls
