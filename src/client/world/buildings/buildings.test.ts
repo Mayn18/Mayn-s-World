@@ -67,3 +67,20 @@ describe('scene', () => {
     expect(scene.walls.length).toBeGreaterThan(0);
   });
 });
+
+describe('depth order', () => {
+  const scene = buildScene(townModel, townBuildings, townWalls);
+  const index = new Map(townModel.order.map((t, i) => [`${t.x},${t.y}`, i]));
+  it('draws every building after all the ground it stands on and behind it', () => {
+    for (const { building: b } of scene.placements) {
+      const anchor = index.get(`${b.x + b.w - 1},${b.y + b.d - 1}`)!;
+      for (let y = b.y; y < b.y + b.d; y++) {
+        for (let x = b.x; x < b.x + b.w; x++) expect(index.get(`${x},${y}`)!).toBeLessThanOrEqual(anchor);
+      }
+    }
+  });
+  it('places every one of the 96 footprints on its own terrain level', () => {
+    expect(scene.placements).toHaveLength(96);
+    for (const p of scene.placements) expect(p.origin.level).toBe(townModel.terrain.levels[p.building.y]![p.building.x]);
+  });
+});

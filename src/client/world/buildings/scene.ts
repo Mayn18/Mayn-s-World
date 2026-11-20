@@ -21,7 +21,9 @@ import { type Origin } from './geometry';
 import { type BuildingPalette, buildingPalette } from './palette';
 import { paintBuilding, roofHeightAt } from './painter';
 import { appearanceFor } from './styles';
+import { SPECIAL_KINDS, paintSpecial, specialHeight } from './specials';
 import type { Appearance } from './style';
+import type { DecorLayer } from '../decor/layer';
 
 export interface WallRun {
   points: [number, number][];
@@ -81,6 +83,7 @@ export function buildScene(
   buildings: Building[],
   walls: WallRun[],
   only?: ReadonlySet<number>,
+  decor?: DecorLayer,
 ): Scene {
   const levels = model.terrain.levels;
   const chosen = only ? buildings.filter((b) => only.has(b.id)) : buildings;
@@ -88,8 +91,9 @@ export function buildScene(
   const placements: Placement[] = chosen.map((b) => {
     const level = levels[b.y]![b.x]!;
     const castle = CASTLE_KINDS.includes(b.kind);
-    const appearance = castle ? null : appearanceFor(b);
-    const height = castle ? castleHeight(b) : peakHeight(appearance!);
+    const special = SPECIAL_KINDS.includes(b.kind);
+    const appearance = castle || special ? null : appearanceFor(b);
+    const height = castle ? castleHeight(b) : special ? specialHeight(b) : peakHeight(appearance!);
     return { building: b, origin: { x: b.x, y: b.y, level }, height, appearance };
   });
 
@@ -138,6 +142,15 @@ export function buildScene(
   }
   for (const t of wallList) top = Math.min(top, mapToScreen(t.x, t.y, levels[t.y]![t.x]!).sy - WALL_HEIGHT - 6);
 
+  // Tall trees along the north edge reach above everything else.
+  if (decor) {
+    for (const [k, list] of decor.plan.plants) {
+      const x = k % 1000;
+      const y = Math.floor(k / 1000);
+      for (const p of list) top = Math.min(top, mapToScreen(x + p.ox, y + p.oy, model.surface[y]![x]!).sy - 50 * p.s);
+    }
+  }
+
   const cache = new Map<Theme, BuildingPalette>();
   const paletteFor = (theme: Theme) => {
     let p = cache.get(theme);
@@ -151,6 +164,7 @@ export function buildScene(
     top,
     paintTile(ctx, x, y, theme) {
       const pal = paletteFor(theme);
+      decor?.paintGround(ctx, x, y, pal);
       const rects = shadows.get(key(x, y));
       if (rects) {
         ctx.save();
@@ -176,8 +190,10 @@ export function buildScene(
       if (wall) paintWallTile(ctx, { x, y, level: levels[y]![x]! }, wall.along, pal);
       for (const p of anchors.get(key(x, y)) ?? []) {
         if (p.appearance) paintBuilding(ctx, p.origin, p.building, p.appearance, pal, p.building.id);
+        else if (SPECIAL_KINDS.includes(p.building.kind)) paintSpecial(ctx, p.origin, p.building, pal);
         else paintCastlePiece(ctx, p.origin, p.building, pal);
       }
+      decor?.paintStanding(ctx, x, y, pal);
     },
   };
 }

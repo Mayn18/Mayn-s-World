@@ -36,7 +36,9 @@ export type Extra =
   | { type: 'flag' }
   | { type: 'flowerBoxes' }
   | { type: 'sign'; colour: MaterialName }
-  | { type: 'steps' };
+  | { type: 'steps' }
+  | { type: 'barnDoor' }
+  | { type: 'wheel' };
 
 export interface Appearance {
   volumes: Volume[];

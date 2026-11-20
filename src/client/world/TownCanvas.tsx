@@ -6,8 +6,9 @@ import { terrainPalette } from './render/terrainPalette';
 import { type ViewTransform, fitContain, viewToContent } from './render/viewTransform';
 import { townRoadLayer } from './roads/town';
 import { townModel } from './terrain/town';
-import { REVIEW_IDS, buildScene } from './buildings/scene';
-import { townBuildings, townWalls } from './data/loader';
+import { buildScene } from './buildings/scene';
+import { buildDecorLayer } from './decor/layer';
+import { townBuildings, townDecor, townWalls } from './data/loader';
 import { defaultTheme, type Theme } from './themes';
 
 interface TownCanvasProps {
@@ -46,10 +47,10 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
 
   // The picture's own size and where it starts in projection space. Fixed for the
   // town terrain, so worked out once.
-  const scene = useMemo(
-    () => buildScene(townModel, townBuildings, townWalls, REVIEW_IDS),
-    [],
-  );
+  const scene = useMemo(() => {
+    const decor = buildDecorLayer(townModel, townRoadLayer, townBuildings, townWalls, townDecor);
+    return buildScene(townModel, townBuildings, townWalls, undefined, decor);
+  }, []);
   const bounds = useMemo(() => worldBounds(townModel, scene.top), [scene]);
 
   const draw = useCallback(() => {
@@ -136,7 +137,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
         ref={canvasRef}
         className="world-canvas"
         role="img"
-        aria-label={`The town's terrain, ${townModel.terrain.width} by ${townModel.terrain.height} tiles: a castle hill in the north, terraced town, cliffs, a winding river and surrounding farmland, with its streets, lanes, paths, stairs and bridges. Buildings are not drawn yet.`}
+        aria-label={`The town's terrain, ${townModel.terrain.width} by ${townModel.terrain.height} tiles: a castle hill in the north, terraced town, cliffs, a winding river and surrounding farmland, with its streets, lanes, paths, stairs and bridges. The town fills it: a castle on the hill, about ninety houses, shops and farm buildings, a market square with a fountain, forests, fields and the six destination buildings.`}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => setHovered(null)}
       />
@@ -145,7 +146,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
       <p className="world-readout">
         {hovered
           ? `Tile (${hovered.x}, ${hovered.y}) · level ${hovered.level}${hovered.water ? ' · water' : ''}`
-          : 'Town terrain (no buildings yet) · move the pointer over the ground'}
+          : 'Move the pointer over the ground'}
       </p>
     </div>
   );

@@ -10,6 +10,7 @@
 // itself) so tests can feed it deliberately broken data.
 import type { Crossing, CrossingKind, Terrain } from './types';
 import { type Building, readBuildings } from './buildings';
+import { type DecorData, readDecor } from './decor';
 import { rasterizeRoadTiles } from './roads';
 import layoutJson from './layout.json';
 import { LEVEL_PX, TILE_H, TILE_W } from '../render/projection';
@@ -137,3 +138,6 @@ export const townBuildings: Building[] = readBuildings(
 export const townWalls: { points: [number, number][] }[] = (
   layoutJson as unknown as { walls: { points: number[][] }[] }
 ).walls.map((w) => ({ points: w.points.map((p) => [p[0]!, p[1]!] as [number, number]) }));
+
+// Props, yards, fences, fields, willows and reeds, read once.
+export const townDecor: DecorData = readDecor(layoutJson, townTerrain.width, townTerrain.height);

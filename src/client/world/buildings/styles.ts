@@ -204,6 +204,44 @@ export function appearanceFor(b: Building): Appearance {
     case 'lodge':
       return base(b, 'wallStone', 'roofBrown', [volume(b.w, b.d, 1, { roofShape: 'gable', floorPx: 14 })], { plinth: true, chimneys: 1 });
 
+    // ---- countryside and specialised buildings -------------------------------------
+    case 'barn':
+      return base(b, 'wallBrick', 'roofDark', [volume(b.w, b.d, 1, { roofShape: 'gable', ridge: b.w >= b.d ? 'x' : 'y', floorPx: 17, pitch: 0.5 })], {
+        door: 'wide', plinth: true, windowHeight: 0.3, windowSpacing: 1.3, chimneys: 0, extras: [{ type: 'barnDoor' }],
+      });
+    case 'farm': {
+      const main = volume(b.w, Math.max(2, b.d - 1), 2, { roofShape: 'gable', ridge: 'x' });
+      const wing: Volume = { x0: 0, y0: Math.max(1, b.d - 1.8), x1: Math.max(1.6, b.w * 0.5), y1: b.d, floors: 1, roofShape: 'gable', ridge: 'y', floorPx: 12 };
+      return base(b, pick(['wallCream', 'wallSand'] as MaterialName[], r(1)), pick(['roofBrown', 'roofRed'] as MaterialName[], r(2)), b.d >= 3 ? [main, wing] : [volume(b.w, b.d, 2)], {
+        timber: true, plinth: true, shutters: 'awnGreen', chimneys: 2, door: 'arched', extras: [{ type: 'flowerBoxes' }],
+      });
+    }
+    case 'granary':
+      return base(b, 'wallStone', 'roofSlate', [volume(b.w, b.d, 3, { roofShape: 'hip', pitch: 0.85, floorPx: 12 })], {
+        plinth: true, door: 'wide', windowHeight: 0.28, windowSpacing: 1.1, chimneys: 0,
+      });
+    case 'boathouse':
+      return base(b, 'wallTimber', 'roofBlue', [volume(b.w, b.d, 1, { roofShape: 'gable', ridge: 'x', floorPx: 16, pitch: 0.5 })], {
+        door: 'wide', plinth: true, windowHeight: 0.35, chimneys: 1, extras: [{ type: 'sign', colour: 'awnBlue' }],
+      });
+    case 'chapel': {
+      const nave = volume(b.w, b.d, 2, { roofShape: 'gable', ridge: 'x', pitch: 0.6 });
+      const tower: Volume = { x0: b.w - 1.5, y0: b.d - 1.5, x1: b.w - 0.05, y1: b.d - 0.05, floors: 4, roofShape: 'hip', pitch: 2.1, roof: 'roofSlate', floorPx: 11 };
+      return base(b, 'wallCream', 'roofSlate', [nave, tower], { plinth: true, door: 'arched', windowHeight: 0.7, windowSpacing: 0.95, chimneys: 0, extras: [{ type: 'steps' }] });
+    }
+    case 'observatory':
+      return base(b, 'wallWhite', 'roofSlate', [volume(b.w, b.d, 3, { roofShape: 'flat', roof: 'roofSlate', floorPx: 11 })], {
+        plinth: true, door: 'arched', windowHeight: 0.6, windowSpacing: 0.8, chimneys: 0, extras: [{ type: 'dome' }, { type: 'steps' }],
+      });
+    case 'mill':
+      return base(b, 'wallCream', 'roofBrown', [volume(b.w, b.d, 2, { roofShape: 'gable', ridge: 'y', pitch: 0.55 })], {
+        timber: true, plinth: true, door: 'plain', shutters: 'awnBlue', chimneys: 1, extras: [{ type: 'wheel' }],
+      });
+    case 'market':
+      return base(b, 'wallTimber', 'roofBlue', [volume(b.w, b.d, 1, { roofShape: 'gable', ridge: 'x', floorPx: 16, pitch: 0.5 })], {
+        door: 'wide', awning: 'awnBlue', windowHeight: 0.35, windowSpacing: 1.1, chimneys: 0, extras: [{ type: 'sign', colour: 'awnYellow' }],
+      });
+
     // ---- commercial ----------------------------------------------------------
     case 'cafe':
       return base(b, pick(['wallCream', 'wallSand', 'wallWhite'] as MaterialName[], r(1)), pick(['roofRed', 'roofOrange', 'roofGreen'] as MaterialName[], r(2)), [volume(b.w, b.d, 2, { roofShape: 'hip' })], {
@@ -297,6 +335,7 @@ export function appearanceFor(b: Building): Appearance {
 export const DESIGNED_KINDS = [
   'townhall', 'library', 'postoffice', 'workshop', 'signallab', 'cottage', 'cafe', 'inn', 'tavern', 'store',
   'bakery', 'smith', 'warehouse', 'clinic', 'school', 'large', 'multi', 'family', 'row',
+  'barn', 'farm', 'granary', 'boathouse', 'chapel', 'observatory', 'mill', 'market', 'greathall', 'stables', 'lodge',
 ] as const;
 
 export type { Extra };

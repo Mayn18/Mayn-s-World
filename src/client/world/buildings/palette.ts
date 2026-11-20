@@ -26,6 +26,12 @@ export interface BuildingPalette {
   shadow: string;
   flowers: readonly string[];
   leaf: string;
+  leafLight: string;
+  leafDark: string;
+  trunk: string;
+  grassDark: string;
+  wood: string;
+  woodDark: string;
 }
 
 function tone(base: string, ink: string, white: string): Tone {
@@ -55,5 +61,11 @@ export function buildingPalette(theme: Theme): BuildingPalette {
     shadow: c.outline,
     flowers: [c.flowerPink, c.flowerYellow, c.flowerWhite],
     leaf: c.leaf,
+    leafLight: c.leafLight,
+    leafDark: c.leafDark,
+    trunk: c.trunk,
+    grassDark: c.grassDark,
+    wood: c.wood,
+    woodDark: c.woodDark,
   };
 }

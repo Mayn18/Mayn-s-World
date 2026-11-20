@@ -13,6 +13,7 @@ import type { ScreenPoint } from '../render/projection';
 import { fillPolygon, strokeLine } from '../render/shapes';
 import { mix } from '../render/terrainPalette';
 import { type Origin, at } from './geometry';
+import { hash2 } from './random';
 import type { BuildingPalette, Tone } from './palette';
 import type { Appearance, Extra, Volume } from './style';
 
@@ -313,6 +314,21 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
   if (ridgeA.sx !== ridgeB.sx || ridgeA.sy !== ridgeB.sy) strokeLine(ctx, ridgeA, ridgeB, roofTone.light, 1.3);
 }
 
+// A thin wisp of smoke: three pale puffs drifting up and to the right, fading as they
+// rise. Only some chimneys smoke, so the town does not look like a row of kettles.
+function paintSmoke(ctx: CanvasRenderingContext2D, from: ScreenPoint, r: number, pal: BuildingPalette): void {
+  if (r > 0.6) return;
+  ctx.save();
+  [[2, -4, 1.9, 0.5], [4.5, -9, 2.4, 0.36], [8, -14, 2.9, 0.24]].forEach(([dx, dy, rad, a]) => {
+    ctx.globalAlpha = a!;
+    ctx.beginPath();
+    ctx.arc(from.sx + dx!, from.sy + dy!, rad!, 0, Math.PI * 2);
+    ctx.fillStyle = pal.white;
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
 function paintChimneys(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: Appearance, pal: BuildingPalette, count: number, seed: number): void {
   if (vol.roofShape === 'flat') return;
   const brick = pal.m.wallBrick;
@@ -325,6 +341,7 @@ function paintChimneys(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, ap
     const my = alongX ? vol.y0 + d / 2 - 0.1 : vol.y0 + d * t;
     const base = roofHeightAt(app, vol, mx + 0.1, my + 0.1) - 1.5;
     box(ctx, o, mx, my, mx + 0.2, my + 0.2, base, base + 8, brick, pal.m.iron.lit);
+    paintSmoke(ctx, at(o, mx + 0.1, my + 0.1, base + 9), hash2(seed, i, 7), pal);
     fillPolygon(ctx, [at(o, mx - 0.02, my + 0.22, base + 8), at(o, mx + 0.22, my + 0.22, base + 8), at(o, mx + 0.22, my + 0.22, base + 9.2), at(o, mx - 0.02, my + 0.22, base + 9.2)], brick.dark);
   }
 }
@@ -452,6 +469,34 @@ function paintExtra(ctx: CanvasRenderingContext2D, o: Origin, b: Building, app: 
       const p0 = { sx: out.sx - 3, sy: out.sy + 0.5 };
       fillPolygon(ctx, [p0, { sx: p0.sx + 6, sy: p0.sy }, { sx: p0.sx + 6, sy: p0.sy + 5 }, { sx: p0.sx, sy: p0.sy + 5 }], board.lit);
       strokeLine(ctx, p0, { sx: p0.sx + 6, sy: p0.sy }, board.dark, 0.8);
+      break;
+    }
+    case 'barnDoor': {
+      // Big double doors with a white frame and a cross brace, on the entrance wall or,
+      // when that faces away, on the south wall.
+      const f = door?.face ?? 'south';
+      const u = door?.u ?? (main.x0 + main.x1) / 2;
+      const half = 0.62;
+      const h = 13;
+      const trim = pal.m.wallWhite;
+      const lit = f === 'south';
+      fillPolygon(ctx, wallQuad(o, main, f, u - half - 0.05, u + half + 0.05, 0, h + 1), lit ? trim.lit : trim.shade);
+      fillPolygon(ctx, wallQuad(o, main, f, u - half, u + half, 0, h), lit ? pal.m.roofBrown.lit : pal.m.roofBrown.shade);
+      for (const [a, b2] of [[-1, 1], [1, -1]] as const) {
+        strokeLine(ctx, wallPoint(o, main, f, u + a * half, 0), wallPoint(o, main, f, u + b2 * half, h), lit ? trim.lit : trim.shade, 1);
+      }
+      break;
+    }
+    case 'wheel': {
+      // A water wheel on the east wall: a dark ring, pale paddles and a hub.
+      const u = (main.y0 + main.y1) / 2 + 0.2;
+      fillPolygon(ctx, wallDisc(o, main, 'east', u, 9, 8.6), pal.m.doorWood.dark);
+      fillPolygon(ctx, wallDisc(o, main, 'east', u, 9, 6.6), pal.m.wallStone.shade);
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI) / 4;
+        strokeLine(ctx, wallPoint(o, main, 'east', u + (Math.cos(a) * 8.6) / 16, 9 + Math.sin(a) * 8.6), wallPoint(o, main, 'east', u - (Math.cos(a) * 8.6) / 16, 9 - Math.sin(a) * 8.6), pal.m.doorWood.lit, 1.1);
+      }
+      fillPolygon(ctx, wallDisc(o, main, 'east', u, 9, 1.8), pal.m.iron.lit);
       break;
     }
     case 'steps': {
