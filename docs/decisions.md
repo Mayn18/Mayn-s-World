@@ -258,7 +258,7 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 
 ## ADR-020: The town is built from the Stage 2 v2 references: round towers, specialised buildings, a decor layer
 
-**Status:** Accepted, pending owner review of the screenshots in `docs/screenshots/`. Builds on ADR-016, ADR-017 and ADR-019; the terrain and road painters and `layout.json` (byte-identical, sha256 `e81bf53d...1355`) are untouched.
+**Status:** Accepted, pending owner review of the screenshots in `docs/screenshots/`. Builds on ADR-016, ADR-017 and ADR-019. Stage 3 and Stage 4 refinements to roads and ecology are recorded under ADR-021.
 
 **Context:** the first building pass drew every building as boxes with roofs and the castle as square towers with blue pyramid roofs; there were no trees, props or fields. Compared with the approved aerial and the five close-ups, the castle was wrong (the reference has round towers with terracotta, brown and slate cones), a dozen kinds (windmill, mill, barns, chapel, observatory, stalls, fountain, bandstand, market, granary, boathouse, town gates) fell back to a generic house, and the countryside was empty.
 
@@ -272,7 +272,7 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 
 **Interpretations to confirm:** `field_types` codes are not named in the file. They were matched to the aerial: 1 wheat, 2 furrowed crops, 3 straw, 4 pasture (fenced, with the six sheep). The forest zones and the town-gate towers are the renderer's reading of the aerial.
 
-**Not done yet:** the waterfall and mill race of detail-4, animation of smoke, sails and water, cached rendering (the whole town redraws on resize, about 2,500 trees and 96 buildings), real destination links over the canvas.
+**Not done yet:** the waterfall refinement, animation of smoke, sails and water, cached rendering (the whole town redraws on resize, about 2,500 trees and 96 buildings), and real destination links over the canvas. Stage 4 adds a short millrace beside the water mill (ADR-021).
 
 ## ADR-021 — Town redesign: castle hill and building families
 **Status:** Accepted (branch `feat/town-world-redesign`)
@@ -298,5 +298,8 @@ continues across the square, the plaza has a broad perimeter paving course, and 
 have their own surface. The castle approach, district streets and existing bridge crossings
 remain connected without moving buildings.
 
-Stage 4 (forest, field and riverbank redistribution) remains.
+Stage 4 completed the ecology refinement: forest edges feather into open land, mapped orchard
+trees, hedgerows and a farm windbreak follow the field boundaries, and deterministic reeds and
+willows favour open riverbanks. Two water tiles extend the stream along the water mill as a
+short millrace. Cultivated fields and town lawns remain open.
 

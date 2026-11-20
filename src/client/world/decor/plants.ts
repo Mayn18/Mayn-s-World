@@ -17,6 +17,7 @@ export type PlantKind =
   | 'blossom'
   | 'willow'
   | 'bush'
+  | 'hedge'
   | 'rock'
   | 'log'
   | 'reeds';
@@ -160,6 +161,15 @@ function bush(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal:
   ball(ctx, f.sx, f.sy - r * 0.8, r, p);
 }
 
+function hedge(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal: BuildingPalette): void {
+  const p = leafPalette(pal, 'oak', v);
+  groundShadow(ctx, f, 8 * s, pal);
+  for (const [dx, dy] of [[-5, -2], [0, -3], [5, -2]] as const) {
+    disc(ctx, f.sx + dx * s, f.sy + dy * s, 4.2 * s, 2.8 * s, p.shade);
+    disc(ctx, f.sx + (dx - 0.8) * s, f.sy + (dy - 1) * s, 3.6 * s, 2.3 * s, p.lit);
+  }
+}
+
 function rock(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal: BuildingPalette): void {
   const t = pal.m.wallStone;
   const w = (3 + v * 3.2) * s;
@@ -212,6 +222,9 @@ export function paintPlant(ctx: CanvasRenderingContext2D, f: Foot, kind: PlantKi
     case 'blossom':
     case 'willow':
       round(ctx, f, kind, v, s, pal);
+      break;
+    case 'hedge':
+      hedge(ctx, f, v, s, pal);
       break;
     case 'spruce':
       spruce(ctx, f, v, s, pal);

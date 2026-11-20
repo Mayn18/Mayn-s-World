@@ -36,6 +36,9 @@ export interface DecorData {
   fields: readonly (readonly FieldType[])[];
   willows: [number, number][];
   reeds: [number, number][];
+  orchards: [number, number][];
+  hedgerows: [number, number][];
+  windbreaks: [number, number][];
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -96,12 +99,22 @@ export function readDecor(layout: unknown, width: number, height: number): Decor
 
   const veg = layout.vegetation;
   if (!isRecord(veg)) throw new Error('layout.json: "vegetation" must be an object');
+  const plantingPoints = (key: string) => {
+    const points = readPairs(veg[key], `vegetation.${key}`);
+    points.forEach(([x, y], i) => {
+      if (!inside(x, y)) throw new Error(`layout.json: vegetation.${key}[${i}] is outside the map`);
+    });
+    return points;
+  };
   return {
     props,
     yards,
     fences,
     fields,
-    willows: readPairs(veg.willows, 'vegetation.willows'),
-    reeds: readPairs(veg.reeds, 'vegetation.reeds'),
+    willows: plantingPoints('willows'),
+    reeds: plantingPoints('reeds'),
+    orchards: plantingPoints('orchards'),
+    hedgerows: plantingPoints('hedgerows'),
+    windbreaks: plantingPoints('windbreaks'),
   };
 }

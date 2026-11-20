@@ -56,31 +56,34 @@ interface Forest {
 
 // How wooded a tile is, from 0 (lawn) to about 0.9 (dense forest).
 export function forestAt(x: number, y: number, width: number, height: number): Forest {
-  void height;
   let density = 0;
   let conifers = 0.4;
-  // Highlands north of the castle and the whole north edge.
-  if (y <= 3) {
+  const northEdge = 3 + Math.sin(x * 0.31) * 1.15 + Math.sin(x * 0.13 + 1.1) * 0.65;
+  // Highlands north of the castle, with a broken, natural tree line.
+  if (y <= northEdge) {
     density = 0.88;
     conifers = 0.55;
   }
-  // The great northern and north-eastern forest.
-  if (x >= 34 && y <= 13) {
+  // The great northern and north-eastern forest, feathered around its edge.
+  const forestWest = 34 + Math.sin(y * 0.28) * 1.4 + Math.cos(y * 0.17) * 0.7;
+  const forestSouth = 13 + Math.sin(x * 0.19) * 1.2;
+  if (x >= forestWest && y <= forestSouth) {
     density = Math.max(density, 0.86);
     conifers = 0.62;
-  } else if (x >= 40 && y <= 18) {
+  } else if (x >= forestWest + 6 && y <= 18 + Math.sin(x * 0.16)) {
     density = Math.max(density, 0.7 - (y - 13) * 0.08);
     conifers = 0.6;
   }
   // The west edge: broadleaf woods running down the whole side.
-  if (x <= 3) {
+  const westEdge = 3 + Math.sin(y * 0.3) * 0.8;
+  if (x <= westEdge) {
     density = Math.max(density, 0.9);
     conifers = 0.3;
-  } else if (x <= 9 && y >= 14 && y <= 46) {
+  } else if (x <= 9 + Math.sin(y * 0.22) && y >= 14 && y <= Math.min(height - 14, 46 + Math.sin(x * 0.24) * 1.5)) {
     // Woods fill the strip west of the terraces, thinning toward the town.
-    density = Math.max(density, x <= 6 ? 0.78 : 0.5);
+    density = Math.max(density, x <= 6 + Math.sin(y * 0.2) ? 0.78 : 0.5);
     conifers = 0.32;
-  } else if (x <= 12 && y >= 47) {
+  } else if (x <= 12 && y >= 47 && y <= height - 8) {
     density = Math.max(density, 0.3);
     conifers = 0.25;
   } else if (x <= 5) {
@@ -88,7 +91,7 @@ export function forestAt(x: number, y: number, width: number, height: number): F
     conifers = 0.4;
   }
   // The far east fringe: spruce only, thin.
-  if (x >= width - 4 && y >= 14 && y <= 52) {
+  if (x >= width - 4 + Math.sin(y * 0.24) && y >= 14 && y <= height - 8) {
     density = Math.max(density, 0.42);
     conifers = 0.92;
   }
@@ -157,7 +160,18 @@ export function planDecor(
 
   const paved = (x: number, y: number) =>
     model.terrain.roads[y]![x]! || roads.plaza[y]![x]! || roads.decks[y]![x]! || water[y]![x]!;
-  const free = (x: number, y: number) => x >= 0 && y >= 0 && x < width && y < height && !taken[y]![x]! && !paved(x, y);
+  const free = (x: number, y: number) =>
+    x >= 0 &&
+    y >= 0 &&
+    x < width &&
+    y < height &&
+    !taken[y]![x]! &&
+    !paved(x, y) &&
+    decor.fields[y]![x] === 0;
+
+  const orchard = new Set(decor.orchards.map(([x, y]) => key(x, y)));
+  const hedgerow = new Set(decor.hedgerows.map(([x, y]) => key(x, y)));
+  const windbreak = new Set(decor.windbreaks.map(([x, y]) => key(x, y)));
 
   const nearBuilding = (x: number, y: number) => {
     for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if (footprints.has(key(x + i, y + j))) return true;
@@ -167,6 +181,11 @@ export function planDecor(
     for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) if (water[y + j]?.[x + i]) return true;
     return false;
   };
+  const onBank = (x: number, y: number) =>
+    water[y - 1]?.[x] === true ||
+    water[y]?.[x + 1] === true ||
+    water[y + 1]?.[x] === true ||
+    water[y]?.[x - 1] === true;
 
   const plants = new Map<number, PlacedPlant[]>();
   const add = (x: number, y: number, p: PlacedPlant) => {
@@ -183,6 +202,27 @@ export function planDecor(
       const { density, conifers } = forestAt(x, y, width, height);
       const near = nearBuilding(x, y);
       const lakeside = nearWater(x, y, 2);
+
+      if (orchard.has(key(x, y))) {
+        add(x, y, { kind: 'blossom', ox: 0.5, oy: 0.5, v: h(35), s: 0.78 });
+        continue;
+      }
+      if (hedgerow.has(key(x, y))) {
+        add(x, y, { kind: 'hedge', ox: 0.5, oy: 0.5, v: h(36), s: 1 });
+        continue;
+      }
+      if (windbreak.has(key(x, y))) {
+        add(x, y, { kind: 'poplar', ox: 0.5, oy: 0.5, v: h(37), s: 0.95 });
+        continue;
+      }
+
+      if (onBank(x, y)) {
+        if (h(38) < 0.28) {
+          const kind = h(39) < 0.28 ? 'willow' : 'reeds';
+          add(x, y, { kind, ox: 0.5, oy: 0.5, v: h(40), s: 0.85 + h(41) * 0.3 });
+        }
+        continue;
+      }
 
       if (density > 0.1) {
         const count = h(1) < density ? (h(2) < density * 0.55 ? 2 : 1) : 0;

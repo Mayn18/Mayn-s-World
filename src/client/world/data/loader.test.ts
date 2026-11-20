@@ -38,8 +38,8 @@ describe('townTerrain (the real layout.json)', () => {
 
   it('has the same number of water tiles as the file', () => {
     const inFile = layoutJson.water.join('').split('1').length - 1;
-    expect(inFile).toBe(361);
-    expect(townTerrain.water.flat().filter(Boolean)).toHaveLength(361);
+    expect(inFile).toBe(363);
+    expect(townTerrain.water.flat().filter(Boolean)).toHaveLength(363);
   });
 });
 
@@ -50,10 +50,10 @@ describe('townTerrain: all 80 x 60 tiles are accounted for', () => {
     const land = townTerrain.water.flat().filter((isWater) => !isWater).length;
     expect(tiles).toBe(4800);
     expect(water + land).toBe(4800);
-    expect(water).toBe(361);
+    expect(water).toBe(363);
   });
 
-  it('reads every road tile the file describes (924, counted after the castle redesign)', () => {
+  it('reads every road tile the file describes', () => {
     expect(townTerrain.roads.flat().filter(Boolean)).toHaveLength(949);
   });
 
@@ -61,6 +61,13 @@ describe('townTerrain: all 80 x 60 tiles are accounted for', () => {
     const count = (kind: string) => townTerrain.crossings.filter((c) => c.kind === kind).length;
     expect(townTerrain.crossings).toHaveLength(32);
     expect([count('ramp'), count('stairs'), count('bridge')]).toEqual([17, 9, 6]);
+  });
+
+  it('connects the millrace to the river along the water mill', () => {
+    expect(townTerrain.water[34]![65]).toBe(true);
+    expect(townTerrain.water[35]![65]).toBe(true);
+    expect(townTerrain.water[33]![65]).toBe(true);
+    expect(townTerrain.water[36]![65]).toBe(false);
   });
 });
 

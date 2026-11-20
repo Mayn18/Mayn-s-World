@@ -4,13 +4,14 @@
 grid, elevation, water, roads, buildings and their footprints, connections,
 props, fences, walls and districts.
 
-**Do not edit it without the owner's approval.** The owner authorised the town redesign on
-the `feat/town-world-redesign` branch (see below). `layout.original.json` is the untouched
+**Do not edit it without the owner's approval.** The owner authorised the Stage 3 road and
+Stage 4 ecology changes on the `feat/town-world-redesign` branch (see below).
+`layout.original.json` is the untouched
 Stage 2 export and the way back: copy it over `layout.json` to undo the redesign.
-`loader.ts` validates what the renderer uses (today the
-grid size, tile proportions, `heights`, `water`, `roads` and `connections`) and
-refuses anything that does not match. Visual detail the file does not contain belongs in separate
-renderer-side files keyed to it, never in the JSON.
+The data loaders validate what the renderer uses: grid size, tile proportions,
+`heights`, `water`, `roads`, `connections` and vegetation placement coordinates.
+They refuse anything that does not match. Visual detail the file does not contain
+belongs in separate renderer-side files keyed to it, never in the JSON.
 
 ## Redesign changes (branch `feat/town-world-redesign`)
 
@@ -21,12 +22,13 @@ renderer-side files keyed to it, never in the JSON.
   straight down from the gate; Keep Steps and Ward Walk are new. `level_edges` castle and
   cliff totals were updated to the new derived counts (78 and 110).
 
-Roads are rasterised to tiles (`roads.ts`) and connections are read, but neither
-is drawn yet; they are used to decide which terrain steps are retaining walls
-and which are climbable slopes. `level_edges` is compared with in tests only.
+Roads are rasterised to tiles (`roads.ts`), then drawn with their ramps, stairs,
+bridge decks and the market square by `roads/` and `render/`. `level_edges` is
+compared with the derived terrain in tests only.
 
 Fields the renderer reads: `heights`, `water`, `roads`, `connections`, `buildings`, `walls`, `props`,
-`yards`, `fences`, `vegetation` (willows and reeds) and `field_types` (`data/decor.ts`). Not read: `districts`, `checks`.
+`yards`, `fences`, `vegetation` (willows, reeds, orchards, hedgerows and windbreaks) and
+`field_types` (`data/decor.ts`). Not read: `districts`, `checks`.
 
 ## Terrain boundaries are derived
 
@@ -36,13 +38,19 @@ not locations, so the material of each step is derived in
 match the file exactly; the slope / wall split is 166 / 119 here against
 152 / 133 in the file, an approximation documented in ADR-018.
 
-## Known gaps against the Stage 2 v2 artwork
+## Ecology data
 
-These are drawing-level details the file does not describe. They are not map
+The Stage 4 map data names four orchard trees, four hedgerow tiles and three
+windbreak trees. Other forest, lawn and riverbank plants are placed by
+`decor/plan.ts` from deterministic rules. The two millrace water tiles meet the
+existing stream at the water mill; `water` remains the source of truth for the
+channel and its banks.
+
+## Remaining visual details
+
+These are drawing-level details the file does not describe; they are not map
 errors and need no change to the JSON.
 
-- Forests, orchards and tree species. `vegetation` lists only 5 willows and 32
-  reed clusters.
 - Roof colours, building heights and architectural variants, including the
   taller v2 castle.
 - Chimneys, smoke, stall colours, crops and the rocky outcrops under the castle.

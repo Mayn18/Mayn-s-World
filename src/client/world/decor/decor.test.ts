@@ -19,6 +19,9 @@ describe('readDecor', () => {
     expect(townDecor.props).toHaveLength(130);
     expect(townDecor.yards).toHaveLength(17);
     expect(townDecor.fences).toHaveLength(3);
+    expect(townDecor.orchards).toHaveLength(4);
+    expect(townDecor.hedgerows).toHaveLength(4);
+    expect(townDecor.windbreaks).toHaveLength(3);
     expect(townDecor.fields).toHaveLength(60);
     expect(townDecor.fields[0]).toHaveLength(80);
   });
@@ -30,6 +33,10 @@ describe('readDecor', () => {
     const rows = [...layout.field_types];
     rows[0] = '9' + rows[0]!.slice(1);
     expect(() => readDecor({ ...layout, field_types: rows }, 80, 60)).toThrow(/unknown crop/);
+  });
+  it('rejects managed planting locations outside the map', () => {
+    const bad = { ...layout, vegetation: { ...layout.vegetation, orchards: [[80, 60]] } };
+    expect(() => readDecor(bad, 80, 60)).toThrow(/vegetation\.orchards\[0\]/);
   });
 });
 
@@ -83,10 +90,51 @@ describe('plant placement', () => {
     const again = planDecor(townModel, townRoadLayer, townBuildings, townWalls, townDecor);
     expect([...again.plants.entries()]).toEqual([...plan.plants.entries()]);
   });
+  it('places mapped orchard, hedgerow and windbreak plants in their intended roles', () => {
+    for (const [x, y] of townDecor.orchards) {
+      expect(plan.plants.get(key(x, y))?.[0]?.kind, `orchard ${x},${y}`).toBe('blossom');
+    }
+    for (const [x, y] of townDecor.hedgerows) {
+      expect(plan.plants.get(key(x, y))?.[0]?.kind, `hedgerow ${x},${y}`).toBe('hedge');
+    }
+    for (const [x, y] of townDecor.windbreaks) {
+      expect(plan.plants.get(key(x, y))?.[0]?.kind, `windbreak ${x},${y}`).toBe('poplar');
+    }
+  });
+  it('keeps cultivated fields free of opportunistic trees and bushes', () => {
+    for (const [k, plants] of plan.plants) {
+      const x = k % 1000;
+      const y = Math.floor(k / 1000);
+      if (townDecor.fields[y]![x] !== 0) {
+        expect(plants.map((plant) => plant.kind), `field ${x},${y}`).toEqual(
+          expect.not.arrayContaining(['oak', 'spruce', 'poplar', 'blossom', 'bush', 'hedge']),
+        );
+      }
+    }
+  });
   it('makes the north-east a forest of mostly conifers and the meadow nearly bare', () => {
     expect(forestAt(45, 5, 80, 60).density).toBeGreaterThan(0.8);
     expect(forestAt(45, 5, 80, 60).conifers).toBeGreaterThan(0.5);
     expect(forestAt(66, 22, 80, 60).density).toBeLessThan(0.1);
+  });
+  it('feathers the forest edge instead of ending on a straight tile boundary', () => {
+    const edgeDensities = [forestAt(34, 12, 80, 60), forestAt(34, 14, 80, 60), forestAt(34, 16, 80, 60)]
+      .map(({ density }) => density);
+    expect(new Set(edgeDensities).size).toBeGreaterThan(1);
+  });
+  it('plants reeds or willows along enough open riverbank tiles', () => {
+    let waterside = 0;
+    for (const [k, plants] of plan.plants) {
+      const x = k % 1000;
+      const y = Math.floor(k / 1000);
+      const besideWater =
+        townModel.terrain.water[y - 1]?.[x] === true ||
+        townModel.terrain.water[y]?.[x + 1] === true ||
+        townModel.terrain.water[y + 1]?.[x] === true ||
+        townModel.terrain.water[y]?.[x - 1] === true;
+      if (besideWater && plants.some((plant) => plant.kind === 'reeds' || plant.kind === 'willow')) waterside++;
+    }
+    expect(waterside).toBeGreaterThan(20);
   });
   it('leaves open lawns: most free town tiles carry no tree', () => {
     let free = 0;
