@@ -1,9 +1,34 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent,
+} from 'react';
+import {
+  beginPointerPan,
+  finishPointerPan as finishPointerPanGesture,
+  movePointerPan,
+  type PointerPanState,
+  type PointerPanEndReason,
+} from './interaction/pointerPan';
 import { worldBounds } from './render/bounds';
 import { type PickedTile, pickTile } from './render/picking';
 import { paintTerrain } from './render/terrainPainter';
 import { terrainPalette } from './render/terrainPalette';
-import { type ViewTransform, fitContain, viewToContent } from './render/viewTransform';
+import {
+  type CameraState,
+  type ViewTransform,
+  cameraView,
+  fitContain,
+  initialCamera,
+  panCameraBy,
+  viewToContent,
+  wheelDeltaToZoomFactor,
+  zoomCameraAt,
+} from './render/viewTransform';
 import { townRoadLayer } from './roads/town';
 import { townModel } from './terrain/town';
 import { buildScene } from './buildings/scene';
@@ -28,14 +53,14 @@ interface TownCanvasProps {
 //   - the drawing buffer: that size multiplied by devicePixelRatio, so a phone or
 //     laptop with a dense screen gets one buffer pixel per real screen pixel and
 //     the picture is sharp instead of blurry
-// Drawing is then scaled and centred by fitContain (viewTransform.ts) so the
-// terrain keeps its proportions whatever shape the window is. The unused sky
-// around it is the page background, not part of the canvas drawing.
+// fitContain (viewTransform.ts) establishes the framing; the camera applies a
+// uniform scale and offset so the terrain keeps its proportions while zooming
+// and panning. The unused sky around it is the page background.
 //
 // ACCESSIBILITY
-// The canvas is an illustration (role="img"), not a control. Nothing in the world
-// is interactive yet; when destinations become buildings they get real links
-// positioned over the canvas. The tile readout is a developer aid.
+// The canvas shows the world and handles camera gestures; when destinations
+// become interactive, they get real links positioned over the canvas. The tile
+// readout is a developer aid.
 export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,6 +69,10 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
   const viewRef = useRef<ViewTransform>({ scale: 0, offsetX: 0, offsetY: 0 });
   const [hovered, setHovered] = useState<PickedTile | null>(null);
   const [unsupported, setUnsupported] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const panRef = useRef<PointerPanState | null>(null);
+  const suppressClickRef = useRef(false);
+  const redrawFrameRef = useRef<number | null>(null);
 
   // The picture's own size and where it starts in projection space. Fixed for the
   // town terrain, so worked out once.
@@ -52,6 +81,9 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     return buildScene(townModel, townBuildings, townWalls, undefined, decor);
   }, []);
   const bounds = useMemo(() => worldBounds(townModel, scene.top), [scene]);
+  const cameraRef = useRef<CameraState>(initialCamera(bounds.width, bounds.height));
+  const fitRef = useRef<ViewTransform>({ scale: 0, offsetX: 0, offsetY: 0 });
+  const viewportRef = useRef({ width: 0, height: 0 });
 
   const draw = useCallback(() => {
     const box = boxRef.current;
@@ -74,23 +106,33 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     if (canvas.width !== bufferWidth) canvas.width = bufferWidth;
     if (canvas.height !== bufferHeight) canvas.height = bufferHeight;
 
-    const view = fitContain(cssWidth, cssHeight, bounds.width, bounds.height);
+    const fit = fitContain(cssWidth, cssHeight, bounds.width, bounds.height);
+    fitRef.current = fit;
+    viewportRef.current = { width: cssWidth, height: cssHeight };
+    const view = cameraView(fit, cssWidth, cssHeight, cameraRef.current);
     viewRef.current = view;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (view.scale <= 0) return;
 
-    // From here every coordinate is in picture pixels: the transform scales them
-    // to CSS pixels (view.scale), then to buffer pixels (dpr), and moves the
-    // picture to its centred spot. paintTerrain is unchanged from the fixed-size
-    // version; it simply draws into a scaled space.
+    // From here every coordinate is in picture pixels: the camera transform
+    // scales them to CSS pixels (view.scale), then to buffer pixels (dpr), and
+    // positions the picture. paintTerrain is unchanged by camera movement.
     const k = view.scale * dpr;
     ctx.setTransform(k, 0, 0, k, view.offsetX * dpr, view.offsetY * dpr);
     paintTerrain(ctx, townModel, terrainPalette(theme), bounds, townRoadLayer, (c, x, y) =>
       scene.paintTile(c, x, y, theme),
     );
   }, [bounds, theme, scene]);
+
+  const scheduleDraw = useCallback(() => {
+    if (redrawFrameRef.current !== null) return;
+    redrawFrameRef.current = window.requestAnimationFrame(() => {
+      redrawFrameRef.current = null;
+      draw();
+    });
+  }, [draw]);
 
   // Draw once the canvas exists, and redraw whenever its box changes size. The
   // ResizeObserver covers window resizes, rotating a phone and browser UI such as
@@ -99,14 +141,99 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
   useEffect(() => {
     draw();
     const box = boxRef.current;
+    const canvas = canvasRef.current;
     const observer = box ? new ResizeObserver(draw) : null;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const factor = wheelDeltaToZoomFactor(event.deltaY, event.deltaMode, window.innerHeight);
+      if (factor === null || !canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const viewport = viewportRef.current;
+      const nextCamera = zoomCameraAt(
+        cameraRef.current,
+        fitRef.current,
+        viewport.width,
+        viewport.height,
+        bounds.width,
+        bounds.height,
+        event.clientX - rect.left,
+        event.clientY - rect.top,
+        factor,
+      );
+      if (nextCamera === cameraRef.current) return;
+
+      cameraRef.current = nextCamera;
+      viewRef.current = cameraView(
+        fitRef.current,
+        viewport.width,
+        viewport.height,
+        nextCamera,
+      );
+      scheduleDraw();
+    };
+
     if (box) observer?.observe(box);
     window.addEventListener('resize', draw);
+    canvas?.addEventListener('wheel', handleWheel, { passive: false });
     return () => {
       observer?.disconnect();
       window.removeEventListener('resize', draw);
+      canvas?.removeEventListener('wheel', handleWheel);
+      if (redrawFrameRef.current !== null) {
+        window.cancelAnimationFrame(redrawFrameRef.current);
+        redrawFrameRef.current = null;
+      }
     };
-  }, [draw]);
+  }, [bounds.height, bounds.width, draw, scheduleDraw]);
+
+  function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
+    const gesture = beginPointerPan(
+      event.pointerId,
+      event.button,
+      event.pointerType,
+      event.clientX,
+      event.clientY,
+    );
+    if (!gesture) return;
+
+    panRef.current = gesture;
+  }
+
+  function handlePanPointerMove(event: PointerEvent<HTMLDivElement>) {
+    const gesture = panRef.current;
+    if (!gesture) return;
+    const movement = movePointerPan(
+      gesture,
+      event.pointerId,
+      event.clientX,
+      event.clientY,
+    );
+    if (!movement) return;
+
+    panRef.current = movement.state;
+    if (!movement.state.dragging) return;
+
+    if (!gesture.dragging) event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    setIsPanning(true);
+    setHovered(null);
+    const viewport = viewportRef.current;
+    const camera = panCameraBy(
+      cameraRef.current,
+      fitRef.current,
+      movement.deltaX,
+      movement.deltaY,
+    );
+    cameraRef.current = camera;
+    viewRef.current = cameraView(
+      fitRef.current,
+      viewport.width,
+      viewport.height,
+      camera,
+    );
+    scheduleDraw();
+  }
 
   // Window position -> picture pixel (undo the fit) -> projection space (add the
   // picture's origin) -> tile.
@@ -127,17 +254,57 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     );
   }
 
+  function finishPointerGesture(
+    event: PointerEvent<HTMLDivElement>,
+    reason: PointerPanEndReason,
+  ) {
+    const gesture = panRef.current;
+    if (!gesture) return;
+    const suppressClick = finishPointerPanGesture(gesture, event.pointerId, reason);
+    if (suppressClick === null) return;
+
+    panRef.current = null;
+    setIsPanning(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (suppressClick) {
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+    }
+  }
+
+  function handleClickCapture(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!suppressClickRef.current) return;
+    suppressClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   if (unsupported) {
     return <p className="world-fallback">This browser could not draw the world.</p>;
   }
 
   return (
-    <div ref={boxRef} className="world-box">
+    <div
+      ref={boxRef}
+      className={isPanning ? 'world-box is-panning' : 'world-box'}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePanPointerMove}
+      onPointerUp={(event) => finishPointerGesture(event, 'up')}
+      onPointerCancel={(event) => finishPointerGesture(event, 'cancel')}
+      onLostPointerCapture={(event) => finishPointerGesture(event, 'lost-capture')}
+      onClickCapture={handleClickCapture}
+    >
       <canvas
         ref={canvasRef}
-        className="world-canvas"
+        className={isPanning ? 'world-canvas is-panning' : 'world-canvas'}
         role="img"
-        aria-label={`The town's terrain, ${townModel.terrain.width} by ${townModel.terrain.height} tiles: a castle hill in the north, terraced town, cliffs, a winding river and surrounding farmland, with its streets, lanes, paths, stairs and bridges. The town fills it: a castle on the hill, about ninety houses, shops and farm buildings, a market square with a fountain, forests, fields and the six destination buildings.`}
+        aria-label={`The town's terrain, ${townModel.terrain.width} by ${townModel.terrain.height} tiles: a castle hill in the north, terraced town, cliffs, a winding river and surrounding farmland, with its streets, lanes, paths, stairs and bridges. The town fills it: a castle on the hill, about ninety houses, shops and farm buildings, a market square with a fountain, forests, fields and the six destination buildings. Scroll to zoom; drag with the left mouse button to pan.`}
+        draggable={false}
+        onDragStart={(event) => event.preventDefault()}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => setHovered(null)}
       />
@@ -146,7 +313,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
       <p className="world-readout">
         {hovered
           ? `Tile (${hovered.x}, ${hovered.y}) · level ${hovered.level}${hovered.water ? ' · water' : ''}`
-          : 'Move the pointer over the ground'}
+          : 'Move the pointer over the ground · Scroll to zoom · Drag to pan'}
       </p>
     </div>
   );

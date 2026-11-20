@@ -220,7 +220,7 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 - Scaling is fractional (not whole-number), which suits vector-drawn terrain. Bitmap sprites will need their own scaling rule (probably whole-number pixel scales) when they arrive.
 - The ambient-motion switch and server-status line are no longer shown. Their code remains.
 
-**Not yet decided:** camera pan and zoom (the fit calculation is the starting point), minimum and maximum zoom, and how the interface (title, map index, controls) overlays the world.
+**Not yet decided:** camera pan and how the interface (title, map index, controls) overlays the world. Zoom is recorded in ADR-022.
 
 ## ADR-018: Full-map terrain model and derived boundary materials
 
@@ -302,4 +302,22 @@ Stage 4 completed the ecology refinement: forest edges feather into open land, m
 trees, hedgerows and a farm windbreak follow the field boundaries, and deterministic reeds and
 willows favour open riverbanks. Two water tiles extend the stream along the water mill as a
 short millrace. Cultivated fields and town lawns remain open.
+
+## ADR-022 — Cursor-focused town zoom
+**Status:** Accepted (branch `feat/town-world-redesign`).
+
+The town camera keeps its existing contain-fit as the 1x framing and allows zoom from 1x to 4x.
+Wheel deltas are normalized across pixel, line and page input, capped per event, and applied
+exponentially so trackpads and mouse wheels feel predictable. Zoom keeps the picture point under
+the cursor stationary; reaching 1x restores the full-town framing. The camera stores its zoom and
+picture-space viewport centre, so a resize updates the fit without resetting either. Wheel redraws
+are coalesced to one animation frame. The existing device-pixel-ratio drawing buffer and uniform
+Canvas transform are retained, and picking uses the same camera transform as rendering. Left-mouse
+drag pans by updating that same picture-space centre; pointer capture keeps the drag active outside
+the canvas. A 4 CSS-pixel threshold preserves simple clicks, while a completed drag suppresses its
+generated click. Cancellation and lost capture end the gesture without leaving stale camera input.
+
+**Trade-off:** the 4x cap is relative to each viewport's fit, providing close inspection while
+bounding how far the world can be enlarged on small and large displays alike. Panning is not
+bounded, so users can move the town out of the viewport.
 

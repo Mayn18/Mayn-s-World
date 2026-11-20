@@ -315,11 +315,21 @@ html[data-page-hidden] .ambient-sway {
 .world-box {
   position: absolute;
   inset: 0;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.world-box.is-panning,
+.world-box.is-panning * {
+  cursor: grabbing;
 }
 .world-canvas {
   display: block;
   width: 100%;
   height: 100%;
+  cursor: inherit;
+  -webkit-user-drag: none;
 }
 
 /* Developer readout of the tile under the pointer. A small label over the world,

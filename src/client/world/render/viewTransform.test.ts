@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { fitContain, viewToContent } from './viewTransform';
+import {
+  MAX_ZOOM,
+  MIN_ZOOM,
+  cameraView,
+  fitContain,
+  initialCamera,
+  panCameraBy,
+  viewToContent,
+  wheelDeltaToZoomFactor,
+  zoomCameraAt,
+} from './viewTransform';
 
 describe('fitContain', () => {
   it('fits a wide window by height and centres the picture sideways', () => {
@@ -84,6 +94,155 @@ describe('viewToContent', () => {
 
   it('returns null when nothing is drawn', () => {
     expect(viewToContent({ scale: 0, offsetX: 0, offsetY: 0 }, 10, 10)).toBeNull();
+  });
+});
+
+describe('camera zoom', () => {
+  const contentWidth = 400;
+  const contentHeight = 200;
+  const viewWidth = 1000;
+  const viewHeight = 700;
+  const fit = fitContain(viewWidth, viewHeight, contentWidth, contentHeight);
+
+  it('zooms in and out without changing the initial framing', () => {
+    const initial = initialCamera(contentWidth, contentHeight);
+    expect(cameraView(fit, viewWidth, viewHeight, initial)).toEqual(fit);
+
+    const zoomedIn = zoomCameraAt(
+      initial, fit, viewWidth, viewHeight, contentWidth, contentHeight, 300, 260, 1.5,
+    );
+    expect(zoomedIn.zoom).toBe(1.5);
+
+    const zoomedOut = zoomCameraAt(
+      zoomedIn, fit, viewWidth, viewHeight, contentWidth, contentHeight, 300, 260, 1 / 1.5,
+    );
+    expect(zoomedOut).toEqual(initial);
+  });
+
+  it('keeps the picture point beneath the cursor stationary while zooming', () => {
+    const initial = initialCamera(contentWidth, contentHeight);
+    const cursor = { x: 300, y: 260 };
+    const before = cameraView(fit, viewWidth, viewHeight, initial);
+    const picturePoint = viewToContent(before, cursor.x, cursor.y)!;
+    const zoomed = zoomCameraAt(
+      initial,
+      fit,
+      viewWidth,
+      viewHeight,
+      contentWidth,
+      contentHeight,
+      cursor.x,
+      cursor.y,
+      1.8,
+    );
+    const after = cameraView(fit, viewWidth, viewHeight, zoomed);
+
+    expect(viewToContent(after, cursor.x, cursor.y)).toEqual(picturePoint);
+  });
+
+  it('clamps at minimum and maximum zoom and restores the whole-town framing at minimum', () => {
+    const initial = initialCamera(contentWidth, contentHeight);
+    const maxed = zoomCameraAt(
+      initial, fit, viewWidth, viewHeight, contentWidth, contentHeight, 100, 100, 100,
+    );
+    expect(maxed.zoom).toBe(MAX_ZOOM);
+
+    const mined = zoomCameraAt(
+      maxed, fit, viewWidth, viewHeight, contentWidth, contentHeight, 900, 600, 0.001,
+    );
+    expect(mined).toEqual({ ...initial, zoom: MIN_ZOOM });
+    expect(cameraView(fit, viewWidth, viewHeight, mined)).toEqual(fit);
+  });
+
+  it('preserves zoom and the world-space viewport centre after resizing', () => {
+    const zoomed = zoomCameraAt(
+      initialCamera(contentWidth, contentHeight),
+      fit,
+      viewWidth,
+      viewHeight,
+      contentWidth,
+      contentHeight,
+      300,
+      260,
+      1.75,
+    );
+    const resizedFit = fitContain(800, 500, contentWidth, contentHeight);
+    const resizedView = cameraView(resizedFit, 800, 500, zoomed);
+
+    expect(resizedView.scale / resizedFit.scale).toBe(zoomed.zoom);
+    expect(viewToContent(resizedView, 400, 250)).toEqual({
+      x: zoomed.centerX,
+      y: zoomed.centerY,
+    });
+  });
+
+  it('normalizes wheel units, ignores invalid input, and caps extreme deltas', () => {
+    expect(wheelDeltaToZoomFactor(10, 0, 800)).toBeLessThan(1);
+    expect(wheelDeltaToZoomFactor(-1, 1, 800)).toBeGreaterThan(1);
+    expect(wheelDeltaToZoomFactor(1, 2, 800)).toBeLessThan(1);
+    expect(wheelDeltaToZoomFactor(0, 0, 800)).toBeNull();
+    expect(wheelDeltaToZoomFactor(Number.NaN, 0, 800)).toBeNull();
+    expect(wheelDeltaToZoomFactor(Number.POSITIVE_INFINITY, 0, 800)).toBeNull();
+    expect(wheelDeltaToZoomFactor(1, 3, 800)).toBeNull();
+    expect(wheelDeltaToZoomFactor(1e100, 0, 800)).toBeCloseTo(Math.exp(-0.36));
+  });
+});
+
+describe('camera panning', () => {
+  const contentWidth = 400;
+  const contentHeight = 200;
+  const viewWidth = 1000;
+  const viewHeight = 700;
+  const fit = fitContain(viewWidth, viewHeight, contentWidth, contentHeight);
+
+  it('moves the camera with the pointer in all four directions', () => {
+    const camera = initialCamera(contentWidth, contentHeight);
+    const startView = cameraView(fit, viewWidth, viewHeight, camera);
+    for (const [deltaX, deltaY] of [
+      [20, 0],
+      [-20, 0],
+      [0, 20],
+      [0, -20],
+    ] as const) {
+      const moved = panCameraBy(camera, fit, deltaX, deltaY);
+      const movedView = cameraView(fit, viewWidth, viewHeight, moved);
+      expect(movedView.offsetX).toBeCloseTo(startView.offsetX + deltaX);
+      expect(movedView.offsetY).toBeCloseTo(startView.offsetY + deltaY);
+    }
+  });
+
+  it('uses the active zoom scale and preserves zoom for each pan', () => {
+    for (const zoom of [1, 2, MAX_ZOOM]) {
+      const camera = { ...initialCamera(contentWidth, contentHeight), zoom };
+      const start = cameraView(fit, viewWidth, viewHeight, camera);
+      const moved = panCameraBy(camera, fit, 24, -12);
+      const after = cameraView(fit, viewWidth, viewHeight, moved);
+
+      expect(moved.zoom).toBe(zoom);
+      expect(after.offsetX).toBeCloseTo(start.offsetX + 24);
+      expect(after.offsetY).toBeCloseTo(start.offsetY - 12);
+    }
+  });
+
+  it('keeps cursor-focused zoom working after a pan', () => {
+    const panned = panCameraBy(initialCamera(contentWidth, contentHeight), fit, 40, -25);
+    const cursor = { x: 350, y: 240 };
+    const before = cameraView(fit, viewWidth, viewHeight, panned);
+    const focus = viewToContent(before, cursor.x, cursor.y)!;
+    const zoomed = zoomCameraAt(
+      panned,
+      fit,
+      viewWidth,
+      viewHeight,
+      contentWidth,
+      contentHeight,
+      cursor.x,
+      cursor.y,
+      1.6,
+    );
+
+    expect(viewToContent(cameraView(fit, viewWidth, viewHeight, zoomed), cursor.x, cursor.y))
+      .toEqual(focus);
   });
 });
 

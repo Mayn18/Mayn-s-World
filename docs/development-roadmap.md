@@ -67,7 +67,7 @@ Done (Milestone 4, town art: castle, buildings, vegetation and props, ADR-020):
 - A decor layer adds forests, lawn trees, fences, crop fields, garden beds, props, boats, sheep and villagers.
 - Not yet: waterfall and mill race, animation, destination links, cached drawing.
 
-Remaining for the town: buildings, vegetation and props; camera (pan and zoom); selectable destination buildings; ambient life. The unused meadow files stay until they are deleted deliberately.
+Remaining for the town: selectable destination buildings; ambient life. Camera zoom and mouse-drag panning are implemented in ADR-022. The unused meadow files stay until they are deleted deliberately.
 
 Remaining:
 - Real destination pages (Phase 5). Until then each destination shows a placeholder panel and nothing else.
