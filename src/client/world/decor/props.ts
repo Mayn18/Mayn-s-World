@@ -175,7 +175,122 @@ function sign(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): v
   fillPolygon(ctx, [{ sx: c.sx - 4, sy: c.sy - 13 }, { sx: c.sx + 4, sy: c.sy - 11 }, { sx: c.sx + 4, sy: c.sy - 6 }, { sx: c.sx - 4, sy: c.sy - 8 }], pal.m.doorWood.lit);
 }
 
-export const PROP_KINDS = ['lamp', 'bench', 'well', 'crate', 'haystack', 'hive', 'sheep', 'scarecrow', 'boat', 'net', 'sign'] as const;
+// ---- everyday life: casks, carts, woodpiles, troughs, cattle, training and washing ----
+
+function barrel(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
+  const wood = pal.m.doorWood;
+  const c = at(o, 0.5, 0.5, 0);
+  shadow(ctx, o, 0.5, 0.5, 0.2, pal);
+  ctx.beginPath();
+  ctx.moveTo(c.sx - 3.2, c.sy);
+  ctx.quadraticCurveTo(c.sx - 4.4, c.sy - 4, c.sx - 3.2, c.sy - 8);
+  ctx.lineTo(c.sx + 3.2, c.sy - 8);
+  ctx.quadraticCurveTo(c.sx + 4.4, c.sy - 4, c.sx + 3.2, c.sy);
+  ctx.closePath();
+  ctx.fillStyle = wood.lit;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(c.sx, c.sy - 8, 3.2, 1.6, 0, 0, Math.PI * 2);
+  ctx.fillStyle = wood.light;
+  ctx.fill();
+  for (const y of [2.4, 5.6]) strokeLine(ctx, { sx: c.sx - 3.8, sy: c.sy - y }, { sx: c.sx + 3.8, sy: c.sy - y }, pal.m.iron.lit, 0.8);
+}
+
+function cart(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, alongX: boolean): void {
+  const wood = pal.m.doorWood;
+  shadow(ctx, o, 0.5, 0.5, 0.5, pal);
+  if (alongX) slab(ctx, o, 0.08, 0.3, 0.92, 0.7, 3, 7, wood.lit, wood.shade, wood.light);
+  else slab(ctx, o, 0.3, 0.08, 0.7, 0.92, 3, 7, wood.lit, wood.shade, wood.light);
+  // hay load and a wheel on the visible side
+  const hay = pal.m.roofThatch;
+  if (alongX) slab(ctx, o, 0.15, 0.36, 0.85, 0.64, 7, 10, hay.lit, hay.shade, hay.light);
+  else slab(ctx, o, 0.36, 0.15, 0.64, 0.85, 7, 10, hay.lit, hay.shade, hay.light);
+  const w = alongX ? at(o, 0.5, 0.72, 3) : at(o, 0.72, 0.5, 3);
+  ctx.beginPath();
+  ctx.ellipse(w.sx, w.sy, 3.4, alongX ? 3.4 : 3.4, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = pal.woodDark;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+}
+
+function woodpile(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
+  const wood = pal.m.doorWood;
+  slab(ctx, o, 0.22, 0.3, 0.78, 0.7, 0, 3, wood.lit, wood.shade, wood.light);
+  slab(ctx, o, 0.28, 0.34, 0.72, 0.66, 3, 5.6, wood.light, wood.lit, wood.light);
+  strokeLine(ctx, at(o, 0.3, 0.7, 1.5), at(o, 0.7, 0.7, 1.5), wood.dark, 0.6);
+}
+
+function trough(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, alongX: boolean): void {
+  const wood = pal.m.doorWood;
+  const water = pal.glass.lit;
+  if (alongX) slab(ctx, o, 0.15, 0.38, 0.85, 0.62, 0, 4, wood.lit, wood.shade, water);
+  else slab(ctx, o, 0.38, 0.15, 0.62, 0.85, 0, 4, wood.lit, wood.shade, water);
+}
+
+function cow(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, v: number): void {
+  const c = at(o, 0.3 + v * 0.4, 0.5, 0);
+  const patch = v > 0.5;
+  ctx.fillStyle = pal.outline;
+  for (const dx of [-3.6, -1.8, 1.6, 3.4]) ctx.fillRect(c.sx + dx, c.sy - 3, 0.9, 3);
+  ctx.beginPath();
+  ctx.ellipse(c.sx, c.sy - 5, 5, 2.9, 0, 0, Math.PI * 2);
+  ctx.fillStyle = patch ? pal.m.wallBrick.lit : pal.white;
+  ctx.fill();
+  if (!patch) {
+    ctx.beginPath();
+    ctx.ellipse(c.sx - 1.2, c.sy - 5.6, 1.6, 1.1, 0, 0, Math.PI * 2);
+    ctx.fillStyle = pal.outline;
+    ctx.fill();
+  }
+  ctx.fillStyle = patch ? pal.m.wallBrick.shade : mix(pal.white, pal.outline, 0.3);
+  ctx.fillRect(c.sx + 4.2, c.sy - 7.4, 2.6, 2.6);
+}
+
+// A padded post and a crossbar: where the garrison practises.
+function dummy(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
+  const c = at(o, 0.5, 0.5, 0);
+  ctx.strokeStyle = pal.woodDark;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(c.sx, c.sy);
+  ctx.lineTo(c.sx, c.sy - 13);
+  ctx.moveTo(c.sx - 4.5, c.sy - 9.5);
+  ctx.lineTo(c.sx + 4.5, c.sy - 9.5);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(c.sx, c.sy - 6.5, 2.3, 3.2, 0, 0, Math.PI * 2);
+  ctx.fillStyle = pal.m.roofThatch.lit;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(c.sx, c.sy - 14.5, 1.8, 0, Math.PI * 2);
+  ctx.fillStyle = pal.m.roofThatch.shade;
+  ctx.fill();
+}
+
+// Washing on a line between two posts.
+function laundry(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, alongX: boolean): void {
+  const a = alongX ? at(o, 0.05, 0.5, 0) : at(o, 0.5, 0.05, 0);
+  const b = alongX ? at(o, 0.95, 0.5, 0) : at(o, 0.5, 0.95, 0);
+  ctx.strokeStyle = pal.woodDark;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(a.sx, a.sy);
+  ctx.lineTo(a.sx, a.sy - 11);
+  ctx.moveTo(b.sx, b.sy);
+  ctx.lineTo(b.sx, b.sy - 11);
+  ctx.moveTo(a.sx, a.sy - 10.5);
+  ctx.lineTo(b.sx, b.sy - 10.5);
+  ctx.stroke();
+  const cloths = [pal.white, pal.m.awnBlue.lit, pal.m.awnRed.lit];
+  cloths.forEach((col, i) => {
+    const t = 0.25 + i * 0.25;
+    const x = a.sx + (b.sx - a.sx) * t;
+    const y = a.sy + (b.sy - a.sy) * t - 10.5;
+    fillPolygon(ctx, [{ sx: x - 1.7, sy: y }, { sx: x + 1.7, sy: y }, { sx: x + 1.7, sy: y + 5 }, { sx: x - 1.7, sy: y + 5 }], col);
+  });
+}
+
+export const PROP_KINDS = ['lamp', 'bench', 'well', 'crate', 'haystack', 'hive', 'sheep', 'scarecrow', 'boat', 'net', 'sign', 'barrel', 'cart', 'woodpile', 'trough', 'cow', 'dummy', 'laundry'] as const;
 
 export function paintProp(ctx: CanvasRenderingContext2D, o: Origin, kind: string, pal: BuildingPalette, v: number, alongX: boolean): void {
   switch (kind) {
@@ -190,6 +305,13 @@ export function paintProp(ctx: CanvasRenderingContext2D, o: Origin, kind: string
     case 'boat': return boat(ctx, o, pal, v);
     case 'net': return net(ctx, o, pal);
     case 'sign': return sign(ctx, o, pal);
+    case 'barrel': return barrel(ctx, o, pal);
+    case 'cart': return cart(ctx, o, pal, alongX);
+    case 'woodpile': return woodpile(ctx, o, pal);
+    case 'trough': return trough(ctx, o, pal, alongX);
+    case 'cow': return cow(ctx, o, pal, v);
+    case 'dummy': return dummy(ctx, o, pal);
+    case 'laundry': return laundry(ctx, o, pal, alongX);
     default: return undefined;
   }
 }

@@ -16,7 +16,7 @@ const plan = planDecor(townModel, townRoadLayer, townBuildings, townWalls, townD
 
 describe('readDecor', () => {
   it('reads every prop, yard and fence in the map file', () => {
-    expect(townDecor.props).toHaveLength(61);
+    expect(townDecor.props).toHaveLength(130);
     expect(townDecor.yards).toHaveLength(17);
     expect(townDecor.fences).toHaveLength(3);
     expect(townDecor.fields).toHaveLength(60);

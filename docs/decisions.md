@@ -289,6 +289,10 @@ for the castle hill; `layout.original.json` is the unmodified export and the way
 - Surface detail still comes from geometry (courses, battered feet, corbels, crowns), never
   from texture (ADR-019).
 
-Not yet done from the redesign brief: road hierarchy and market refinement, forest, field and
-riverbank redistribution, and props and harbour life.
+- Everyday-life props (barrels, carts, woodpiles, troughs, cattle, training dummies, laundry)
+  were added in restrained numbers beside homes, the market, the harbour, farms and the castle
+  wards. The map file now holds 130 props.
+
+Not yet done from the redesign brief: road hierarchy and market refinement, and forest, field
+and riverbank redistribution.
 
