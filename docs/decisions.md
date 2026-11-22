@@ -321,3 +321,12 @@ generated click. Cancellation and lost capture end the gesture without leaving s
 bounding how far the world can be enlarged on small and large displays alike. Panning is not
 bounded, so users can move the town out of the viewport.
 
+## ADR-023 — Cache the static town for camera redraws
+**Status:** Accepted (branch `feat/town-world-redesign`).
+
+**Context:** panning or zooming repainted all 4,800 terrain tiles and every building and decor item, although the town itself does not move. A local browser profile at 1024 x 768 reported roughly 185,000 Canvas 2D calls per redraw. With only animation-frame timing instrumentation, zoom redraws took 136–156 ms and a pan redraw took 281 ms; runs that also wrapped Canvas methods took 269–366 ms, so those call-count timings include instrumentation overhead.
+
+**Decision:** `TownCanvas` renders the existing painter output into offscreen canvases sized for the maximum camera zoom and device-pixel ratio. It first displays a 1x cache, then builds a higher-resolution cache in short animation-frame batches and swaps it in only when complete. The cache uses power-of-two scale tiers up to a 64 MiB per-image budget; it is not rebuilt for camera wheel or pan events, and higher-resolution results are reused when zooming back out. A larger viewport or DPR only triggers an upgrade when the current cache no longer covers the new maximum output scale. The existing terrain, building, decor and depth-order painters remain the source of truth; no geography or art is simplified.
+
+**Trade-offs:** an upgrade temporarily retains both the old and new full-world bitmaps, and the 64 MiB cap can require some upscaling on very high-DPR or large displays. The old cache remains visible while an upgrade is prepared, so there is no blank frame; the painter is split into contiguous depth-ordered batches to keep individual main-thread tasks short. The world is static today. Future animated or otherwise dynamic elements should use a separate layer or an explicit cache invalidation rather than repainting the full town during camera movement.
+

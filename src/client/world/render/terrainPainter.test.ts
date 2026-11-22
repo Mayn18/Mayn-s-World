@@ -69,6 +69,24 @@ describe('paintTerrain', () => {
     const cliff = paint([[4, 0]]);
     expect(cliff.lines.some((l) => l.colour === palette.faces.cliff.line)).toBe(true);
   });
+
+  it('draws adjacent tile ranges identically to one complete pass', () => {
+    const model = buildTerrainModel(makeTerrain([[2, 1, 0], [1, 3, 2]]));
+    const bounds = worldBounds(model);
+    const full = recordingContext();
+    const batched = recordingContext();
+
+    paintTerrain(full.ctx, model, palette, bounds);
+    for (let start = 0; start < model.order.length; start += 2) {
+      paintTerrain(batched.ctx, model, palette, bounds, undefined, undefined, {
+        start,
+        end: start + 2,
+      });
+    }
+
+    expect(batched.polygons).toEqual(full.polygons);
+    expect(batched.lines).toEqual(full.lines);
+  });
 });
 
 describe('paintTerrain on the whole town', () => {

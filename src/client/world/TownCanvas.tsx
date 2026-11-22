@@ -15,12 +15,14 @@ import {
   type PointerPanEndReason,
 } from './interaction/pointerPan';
 import { worldBounds } from './render/bounds';
+import { cacheResolution } from './render/cacheResolution';
 import { type PickedTile, pickTile } from './render/picking';
-import { paintTerrain } from './render/terrainPainter';
+import { type TileRange, paintTerrain } from './render/terrainPainter';
 import { terrainPalette } from './render/terrainPalette';
 import {
   type CameraState,
   type ViewTransform,
+  MAX_ZOOM,
   cameraView,
   fitContain,
   initialCamera,
@@ -39,6 +41,21 @@ import { defaultTheme, type Theme } from './themes';
 interface TownCanvasProps {
   theme?: Theme;
 }
+
+interface TerrainCanvasCache {
+  canvas: HTMLCanvasElement;
+  theme: Theme;
+  scale: number;
+}
+
+interface TerrainCacheBuild extends TerrainCanvasCache {
+  context: CanvasRenderingContext2D;
+  nextTile: number;
+  frameId: number;
+}
+
+const CACHE_BUILD_BUDGET_MS = 3;
+const CACHE_BUILD_TILE_BATCH = 8;
 
 // The whole 80 x 60 town terrain, filling whatever box it is placed in (the page gives it the whole
 // browser window; see .world-viewport in styles.css).
@@ -73,6 +90,10 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
   const panRef = useRef<PointerPanState | null>(null);
   const suppressClickRef = useRef(false);
   const redrawFrameRef = useRef<number | null>(null);
+  const terrainCanvasRef = useRef<TerrainCanvasCache | null>(null);
+  const terrainCacheBuildRef = useRef<TerrainCacheBuild | null>(null);
+  const blockedCacheScaleRef = useRef(0);
+  const drawRef = useRef<() => void>(() => {});
 
   // The picture's own size and where it starts in projection space. Fixed for the
   // town terrain, so worked out once.
@@ -84,6 +105,96 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
   const cameraRef = useRef<CameraState>(initialCamera(bounds.width, bounds.height));
   const fitRef = useRef<ViewTransform>({ scale: 0, offsetX: 0, offsetY: 0 });
   const viewportRef = useRef({ width: 0, height: 0 });
+
+  const scheduleDraw = useCallback(() => {
+    if (redrawFrameRef.current !== null) return;
+    redrawFrameRef.current = window.requestAnimationFrame(() => {
+      redrawFrameRef.current = null;
+      drawRef.current();
+    });
+  }, []);
+
+  const startCacheUpgrade = useCallback(
+    (resolution: ReturnType<typeof cacheResolution>) => {
+      const currentBuild = terrainCacheBuildRef.current;
+      if (currentBuild?.theme === theme) return;
+      if (resolution.scale <= blockedCacheScaleRef.current) return;
+
+      if (currentBuild) {
+        window.cancelAnimationFrame(currentBuild.frameId);
+        currentBuild.canvas.width = 0;
+        currentBuild.canvas.height = 0;
+        terrainCacheBuildRef.current = null;
+      }
+
+      const cacheCanvas = document.createElement('canvas');
+      cacheCanvas.width = resolution.width;
+      cacheCanvas.height = resolution.height;
+      const context = cacheCanvas.getContext('2d');
+      if (!context) {
+        blockedCacheScaleRef.current = resolution.scale;
+        console.warn('Could not create a high-resolution town cache; keeping the current cache.');
+        return;
+      }
+      context.setTransform(resolution.scale, 0, 0, resolution.scale, 0, 0);
+
+      const palette = terrainPalette(theme);
+      const decorate = (ctx: CanvasRenderingContext2D, x: number, y: number) =>
+        scene.paintTile(ctx, x, y, theme);
+      const build: TerrainCacheBuild = {
+        canvas: cacheCanvas,
+        context,
+        theme,
+        scale: resolution.scale,
+        nextTile: 0,
+        frameId: 0,
+      };
+      terrainCacheBuildRef.current = build;
+
+      const paintNextBatch = () => {
+        if (terrainCacheBuildRef.current !== build) return;
+        const startedAt = performance.now();
+
+        do {
+          const range: TileRange = {
+            start: build.nextTile,
+            end: Math.min(build.nextTile + CACHE_BUILD_TILE_BATCH, townModel.order.length),
+          };
+          paintTerrain(
+            build.context,
+            townModel,
+            palette,
+            bounds,
+            townRoadLayer,
+            decorate,
+            range,
+          );
+          build.nextTile = range.end;
+        } while (
+          build.nextTile < townModel.order.length &&
+          performance.now() - startedAt < CACHE_BUILD_BUDGET_MS
+        );
+
+        if (build.nextTile === townModel.order.length) {
+          const previousCache = terrainCanvasRef.current;
+          terrainCanvasRef.current = { canvas: build.canvas, theme, scale: build.scale };
+          terrainCacheBuildRef.current = null;
+          blockedCacheScaleRef.current = 0;
+          if (previousCache && previousCache.canvas !== build.canvas) {
+            previousCache.canvas.width = 0;
+            previousCache.canvas.height = 0;
+          }
+          scheduleDraw();
+          return;
+        }
+
+        build.frameId = window.requestAnimationFrame(paintNextBatch);
+      };
+
+      build.frameId = window.requestAnimationFrame(paintNextBatch);
+    },
+    [bounds, scene, scheduleDraw, theme],
+  );
 
   const draw = useCallback(() => {
     const box = boxRef.current;
@@ -106,33 +217,64 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     if (canvas.width !== bufferWidth) canvas.width = bufferWidth;
     if (canvas.height !== bufferHeight) canvas.height = bufferHeight;
 
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     const fit = fitContain(cssWidth, cssHeight, bounds.width, bounds.height);
     fitRef.current = fit;
     viewportRef.current = { width: cssWidth, height: cssHeight };
     const view = cameraView(fit, cssWidth, cssHeight, cameraRef.current);
     viewRef.current = view;
 
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (view.scale <= 0) return;
 
-    // From here every coordinate is in picture pixels: the camera transform
-    // scales them to CSS pixels (view.scale), then to buffer pixels (dpr), and
-    // positions the picture. paintTerrain is unchanged by camera movement.
+    const pendingBuild = terrainCacheBuildRef.current;
+    if (pendingBuild && pendingBuild.theme !== theme) {
+      window.cancelAnimationFrame(pendingBuild.frameId);
+      pendingBuild.canvas.width = 0;
+      pendingBuild.canvas.height = 0;
+      terrainCacheBuildRef.current = null;
+      blockedCacheScaleRef.current = 0;
+    }
+
+    let terrainCanvas = terrainCanvasRef.current;
+    if (!terrainCanvas || terrainCanvas.theme !== theme) {
+      blockedCacheScaleRef.current = 0;
+      const cacheCanvas = document.createElement('canvas');
+      cacheCanvas.width = Math.max(1, Math.ceil(bounds.width));
+      cacheCanvas.height = Math.max(1, Math.ceil(bounds.height));
+      const cacheContext = cacheCanvas.getContext('2d');
+      if (!cacheContext) {
+        setUnsupported(true);
+        return;
+      }
+
+      cacheContext.setTransform(1, 0, 0, 1, 0, 0);
+      paintTerrain(cacheContext, townModel, terrainPalette(theme), bounds, townRoadLayer, (c, x, y) =>
+        scene.paintTile(c, x, y, theme),
+      );
+      terrainCanvas = { canvas: cacheCanvas, theme, scale: 1 };
+      terrainCanvasRef.current = terrainCanvas;
+    }
+
+    const maxResolution = cacheResolution(bounds, fit.scale * MAX_ZOOM, dpr);
     const k = view.scale * dpr;
     ctx.setTransform(k, 0, 0, k, view.offsetX * dpr, view.offsetY * dpr);
-    paintTerrain(ctx, townModel, terrainPalette(theme), bounds, townRoadLayer, (c, x, y) =>
-      scene.paintTile(c, x, y, theme),
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(
+      terrainCanvas.canvas,
+      0,
+      0,
+      terrainCanvas.canvas.width,
+      terrainCanvas.canvas.height,
+      0,
+      0,
+      bounds.width,
+      bounds.height,
     );
-  }, [bounds, theme, scene]);
-
-  const scheduleDraw = useCallback(() => {
-    if (redrawFrameRef.current !== null) return;
-    redrawFrameRef.current = window.requestAnimationFrame(() => {
-      redrawFrameRef.current = null;
-      draw();
-    });
-  }, [draw]);
+    if (terrainCanvas.scale < maxResolution.scale) startCacheUpgrade(maxResolution);
+  }, [bounds, scene, startCacheUpgrade, theme]);
+  drawRef.current = draw;
 
   // Draw once the canvas exists, and redraw whenever its box changes size. The
   // ResizeObserver covers window resizes, rotating a phone and browser UI such as
@@ -180,6 +322,13 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
       observer?.disconnect();
       window.removeEventListener('resize', draw);
       canvas?.removeEventListener('wheel', handleWheel);
+      const cacheBuild = terrainCacheBuildRef.current;
+      if (cacheBuild) {
+        window.cancelAnimationFrame(cacheBuild.frameId);
+        cacheBuild.canvas.width = 0;
+        cacheBuild.canvas.height = 0;
+        terrainCacheBuildRef.current = null;
+      }
       if (redrawFrameRef.current !== null) {
         window.cancelAnimationFrame(redrawFrameRef.current);
         redrawFrameRef.current = null;

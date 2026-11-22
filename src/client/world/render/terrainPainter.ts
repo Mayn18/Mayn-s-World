@@ -37,6 +37,11 @@ import { paintWaterTile } from './waterPainter';
 // How tall the pale cap on top of a retaining wall is, in picture pixels.
 const WALL_CAP_PX = 2;
 
+export interface TileRange {
+  start: number;
+  end: number;
+}
+
 function paintFace(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -74,11 +79,15 @@ export function paintTerrain(
   bounds: Bounds,
   roads?: RoadLayer,
   decorate?: (ctx: CanvasRenderingContext2D, x: number, y: number) => void,
+  range?: TileRange,
 ): void {
   ctx.save();
   ctx.translate(-bounds.left, -bounds.top);
 
-  for (const { x, y } of model.order) {
+  const start = Math.max(0, Math.min(model.order.length, Math.floor(range?.start ?? 0)));
+  const end = Math.max(start, Math.min(model.order.length, Math.floor(range?.end ?? model.order.length)));
+  for (let index = start; index < end; index++) {
+    const { x, y } = model.order[index]!;
     const { south, east } = model.faces[y]![x]!;
     if (south) paintFace(ctx, x, y, 'south', south, palette);
     if (south && roads) paintClimb(ctx, model, roads, x, y, 'south', south, palette);
