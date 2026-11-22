@@ -37,6 +37,12 @@ import { buildScene } from './buildings/scene';
 import { buildDecorLayer } from './decor/layer';
 import { townBuildings, townDecor, townWalls } from './data/loader';
 import { defaultTheme, type Theme } from './themes';
+import {
+  getActiveTheme,
+  getLastThemeSwitchStartedAt,
+  getThemeRebuildCounter,
+  setActiveTheme,
+} from './activeTheme';
 
 interface TownCanvasProps {
   theme?: Theme;
@@ -56,6 +62,69 @@ interface TerrainCacheBuild extends TerrainCanvasCache {
 
 const CACHE_BUILD_BUDGET_MS = 3;
 const CACHE_BUILD_TILE_BATCH = 8;
+
+function releaseCacheCanvas(cache: TerrainCanvasCache | TerrainCacheBuild | null): void {
+  if (cache) {
+    cache.canvas.width = 0;
+    cache.canvas.height = 0;
+  }
+}
+
+function fnv1a(canvas: HTMLCanvasElement): number {
+  const context = canvas.getContext('2d');
+  if (!context) return 0;
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < pixels.length; i += 1) {
+    hash ^= pixels[i]!;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+const devTestTheme: Theme = import.meta.env.DEV
+  ? {
+      ...defaultTheme,
+      id: 'daytime-meadow',
+      name: 'M1 Dev Test',
+      colors: {
+        ...defaultTheme.colors,
+        skyTop: '#321d5c',
+        skyMid: '#633a78',
+        skyLow: '#c06c84',
+        grass: '#7b3f91',
+        grassLight: '#a64d9d',
+        grassDark: '#4a285f',
+        hillFar: '#8b477d',
+        hillNear: '#5d365f',
+        path: '#7d668f',
+        pathEdge: '#5c4c6c',
+        leaf: '#6f2f77',
+        leafLight: '#a84aa2',
+        leafDark: '#44205c',
+        glass: '#ef7bb8',
+        wall: '#f3bda9',
+        wallShade: '#bd7e88',
+        stone: '#77708d',
+      },
+      materials: {
+        ...defaultTheme.materials,
+        wallCream: '#e2a8aa',
+        wallSand: '#a88b9d',
+        wallPlaster: '#f0b7aa',
+        wallBrick: '#9b4168',
+        wallStone: '#77708d',
+        roofRed: '#8f3f76',
+        roofBrown: '#6c365c',
+        roofSlate: '#51406f',
+        roofBlue: '#5b487c',
+        roofGreen: '#6d477d',
+        roofTeal: '#6d477d',
+        roofOrange: '#a65a88',
+        roofThatch: '#a98b76',
+      },
+    }
+  : defaultTheme;
 
 // The whole 80 x 60 town terrain, filling whatever box it is placed in (the page gives it the whole
 // browser window; see .world-viewport in styles.css).
@@ -94,6 +163,17 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
   const terrainCacheBuildRef = useRef<TerrainCacheBuild | null>(null);
   const blockedCacheScaleRef = useRef(0);
   const drawRef = useRef<() => void>(() => {});
+  const devMetricsRef = useRef({
+    coldBuildMs: [] as number[],
+    upgradeWallMs: [] as number[],
+    upgradeSlices: [] as number[],
+    switchToOneMs: [] as number[],
+    switchToUpgradeMs: [] as number[],
+    parityChecksum: null as number | null,
+    parityTheme: null as Theme | null,
+    rebuilds: 0,
+    peakOffscreenBytes: 0,
+  });
 
   // The picture's own size and where it starts in projection space. Fixed for the
   // town terrain, so worked out once.
@@ -122,8 +202,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
 
       if (currentBuild) {
         window.cancelAnimationFrame(currentBuild.frameId);
-        currentBuild.canvas.width = 0;
-        currentBuild.canvas.height = 0;
+        releaseCacheCanvas(currentBuild);
         terrainCacheBuildRef.current = null;
       }
 
@@ -137,6 +216,15 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
         return;
       }
       context.setTransform(resolution.scale, 0, 0, resolution.scale, 0, 0);
+      if (import.meta.env.DEV) {
+        const low = terrainCanvasRef.current;
+        const lowBytes = low
+          ? low.canvas.width * low.canvas.height * 4
+          : 0;
+        const highBytes = cacheCanvas.width * cacheCanvas.height * 4;
+        devMetricsRef.current.peakOffscreenBytes =
+          Math.max(devMetricsRef.current.peakOffscreenBytes, lowBytes + highBytes);
+      }
 
       const palette = terrainPalette(theme);
       const decorate = (ctx: CanvasRenderingContext2D, x: number, y: number) =>
@@ -150,10 +238,20 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
         frameId: 0,
       };
       terrainCacheBuildRef.current = build;
+      const upgradeStartedAt =
+        import.meta.env.DEV ? performance.now() : 0;
+      let upgradeSlices = 0;
 
       const paintNextBatch = () => {
         if (terrainCacheBuildRef.current !== build) return;
+        if (getActiveTheme() !== build.theme) {
+          terrainCacheBuildRef.current = null;
+          releaseCacheCanvas(build);
+          blockedCacheScaleRef.current = 0;
+          return;
+        }
         const startedAt = performance.now();
+        upgradeSlices += 1;
 
         do {
           const range: TileRange = {
@@ -176,13 +274,31 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
         );
 
         if (build.nextTile === townModel.order.length) {
+          if (getActiveTheme() !== build.theme) {
+            terrainCacheBuildRef.current = null;
+            releaseCacheCanvas(build);
+            blockedCacheScaleRef.current = 0;
+            return;
+          }
           const previousCache = terrainCanvasRef.current;
           terrainCanvasRef.current = { canvas: build.canvas, theme, scale: build.scale };
           terrainCacheBuildRef.current = null;
           blockedCacheScaleRef.current = 0;
           if (previousCache && previousCache.canvas !== build.canvas) {
-            previousCache.canvas.width = 0;
-            previousCache.canvas.height = 0;
+            releaseCacheCanvas(previousCache);
+          }
+          if (import.meta.env.DEV) {
+            const elapsed = performance.now() - upgradeStartedAt;
+            devMetricsRef.current.upgradeWallMs.push(elapsed);
+            devMetricsRef.current.upgradeSlices.push(upgradeSlices);
+            const switchStart = getLastThemeSwitchStartedAt();
+            if (switchStart !== null) {
+              devMetricsRef.current.switchToUpgradeMs.push(performance.now() - switchStart);
+            }
+            console.info(
+              '[MaynsWorld:M1] high cache upgrade',
+              { ms: elapsed, slices: upgradeSlices, width: build.canvas.width, height: build.canvas.height, bytes: build.canvas.width * build.canvas.height * 4, theme: theme.id },
+            );
           }
           scheduleDraw();
           return;
@@ -231,8 +347,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     const pendingBuild = terrainCacheBuildRef.current;
     if (pendingBuild && pendingBuild.theme !== theme) {
       window.cancelAnimationFrame(pendingBuild.frameId);
-      pendingBuild.canvas.width = 0;
-      pendingBuild.canvas.height = 0;
+      releaseCacheCanvas(pendingBuild);
       terrainCacheBuildRef.current = null;
       blockedCacheScaleRef.current = 0;
     }
@@ -249,12 +364,52 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
         return;
       }
 
+      const buildStartedAt =
+        import.meta.env.DEV ? performance.now() : 0;
       cacheContext.setTransform(1, 0, 0, 1, 0, 0);
-      paintTerrain(cacheContext, townModel, terrainPalette(theme), bounds, townRoadLayer, (c, x, y) =>
-        scene.paintTile(c, x, y, theme),
-      );
+      try {
+        paintTerrain(cacheContext, townModel, terrainPalette(theme), bounds, townRoadLayer, (c, x, y) =>
+          scene.paintTile(c, x, y, theme),
+        );
+      } catch (error) {
+        releaseCacheCanvas({ canvas: cacheCanvas, theme, scale: 1 });
+        console.warn('Could not rebuild the town cache; keeping the existing cache.', error);
+        scheduleDraw();
+        return;
+      }
+      if (terrainCanvas) {
+        releaseCacheCanvas(terrainCanvas);
+      }
       terrainCanvas = { canvas: cacheCanvas, theme, scale: 1 };
       terrainCanvasRef.current = terrainCanvas;
+      if (import.meta.env.DEV) {
+        const elapsed = performance.now() - buildStartedAt;
+        devMetricsRef.current.coldBuildMs.push(elapsed);
+        devMetricsRef.current.rebuilds = getThemeRebuildCounter();
+        const checksum = fnv1a(cacheCanvas);
+        devMetricsRef.current.parityChecksum = checksum;
+        devMetricsRef.current.parityTheme = theme;
+        const switchStart = getLastThemeSwitchStartedAt();
+        if (switchStart !== null) {
+          devMetricsRef.current.switchToOneMs.push(performance.now() - switchStart);
+        }
+        const bytes = cacheCanvas.width * cacheCanvas.height * 4;
+        devMetricsRef.current.peakOffscreenBytes =
+          Math.max(devMetricsRef.current.peakOffscreenBytes, bytes);
+        console.info(
+          '[MaynsWorld:M1] 1x cache built',
+          { ms: elapsed, width: cacheCanvas.width, height: cacheCanvas.height, bytes, checksum, theme: theme.id },
+        );
+        if (theme === defaultTheme) {
+          console.info('[MaynsWorld:M1] baseline parity', checksum);
+        }
+        window.requestAnimationFrame(() => {
+          const start = getLastThemeSwitchStartedAt();
+          if (start !== null) {
+            // The array is already recorded at swap; this RAF marker confirms presentation.
+          }
+        });
+      }
     }
 
     const maxResolution = cacheResolution(bounds, fit.scale * MAX_ZOOM, dpr);
@@ -335,6 +490,87 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
       }
     };
   }, [bounds.height, bounds.width, draw, scheduleDraw]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+
+    const medians = (values: number[]) => {
+      if (values.length === 0) return { median: 0, min: 0, max: 0 };
+      const sorted = [...values].sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      const median = sorted.length % 2 === 0
+        ? (sorted[middle - 1]! + sorted[middle]!) / 2
+        : sorted[middle]!;
+      return { median, min: sorted[0]!, max: sorted[sorted.length - 1]! };
+    };
+
+    const api = {
+      switchTestTheme: () => setActiveTheme(devTestTheme),
+      switchDaytime: () => setActiveTheme(defaultTheme),
+      repeatThemeSwitches: (count: number) => {
+        const repeats = Math.max(0, Math.min(100, Math.floor(count)));
+        for (let i = 0; i < repeats; i += 1) {
+          setActiveTheme(i % 2 === 0 ? devTestTheme : defaultTheme);
+        }
+      },
+      raceThemeSwitches: () => {
+        setActiveTheme(devTestTheme);
+        setActiveTheme(defaultTheme);
+        setActiveTheme(devTestTheme);
+      },
+      resetMetrics: () => {
+        devMetricsRef.current.coldBuildMs = [];
+        devMetricsRef.current.upgradeWallMs = [];
+        devMetricsRef.current.upgradeSlices = [];
+        devMetricsRef.current.switchToOneMs = [];
+        devMetricsRef.current.switchToUpgradeMs = [];
+        devMetricsRef.current.rebuilds = getThemeRebuildCounter();
+        devMetricsRef.current.peakOffscreenBytes = 0;
+      },
+      getMetrics: () => {
+        const cache = terrainCanvasRef.current;
+        const build = terrainCacheBuildRef.current;
+        const liveCacheCount =
+          (cache ? 1 : 0) + (build ? 1 : 0);
+        const liveBytes =
+          (cache ? cache.canvas.width * cache.canvas.height * 4 : 0) +
+          (build ? build.canvas.width * build.canvas.height * 4 : 0);
+        if (cache) {
+          devMetricsRef.current.peakOffscreenBytes =
+            Math.max(devMetricsRef.current.peakOffscreenBytes, liveBytes);
+        }
+        return {
+          activeThemeId: getActiveTheme().id,
+          activeThemeName: getActiveTheme().name,
+          rebuildCounter: getThemeRebuildCounter(),
+          liveCacheCount,
+          liveBytes,
+          peakOffscreenBytes: devMetricsRef.current.peakOffscreenBytes,
+          coldBuild: medians(devMetricsRef.current.coldBuildMs),
+          upgradeWall: medians(devMetricsRef.current.upgradeWallMs),
+          upgradeSlices: medians(devMetricsRef.current.upgradeSlices),
+          switchToOne: medians(devMetricsRef.current.switchToOneMs),
+          switchToUpgrade: medians(devMetricsRef.current.switchToUpgradeMs),
+          parityChecksum: devMetricsRef.current.parityChecksum,
+          tier: cache
+            ? {
+                width: cache.canvas.width,
+                height: cache.canvas.height,
+                scale: cache.scale,
+                bytes: cache.canvas.width * cache.canvas.height * 4,
+              }
+            : null,
+        };
+      },
+    };
+    const devWindow = window as typeof window & {
+      __maynsWorldM1?: typeof api;
+    };
+    devWindow.__maynsWorldM1 = api;
+    return () => {
+      delete devWindow.__maynsWorldM1;
+    };
+  }, []);
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     const gesture = beginPointerPan(

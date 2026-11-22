@@ -81,9 +81,16 @@ export interface Theme {
   materials: Record<MaterialName, string>;
 }
 
-// Add an id here, and an entry in `themes` below, to add a theme. TypeScript
-// then insists the new palette defines every colour.
-export type ThemeId = 'daytime-meadow';
+// `ThemeId` declares the identifiers reserved for the six planned themes.
+// `themes` is currently a partial registry containing only implemented palettes.
+// When a new palette is added, its entry must define every existing colour.
+export type ThemeId =
+  | 'daytime-meadow'
+  | 'cozy-night'
+  | 'rainy-evening'
+  | 'sunset-dream'
+  | 'enchanted-forest'
+  | 'snowy-cabin';
 
 const daytimeMeadow: Theme = {
   id: 'daytime-meadow',
@@ -160,7 +167,7 @@ const daytimeMeadow: Theme = {
   },
 };
 
-export const themes: Record<ThemeId, Theme> = {
+export const themes: Partial<Record<ThemeId, Theme>> = {
   'daytime-meadow': daytimeMeadow,
 };
 

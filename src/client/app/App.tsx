@@ -1,4 +1,9 @@
+import { useSyncExternalStore } from 'react';
 import { TownCanvas } from '../world/TownCanvas';
+import {
+  getActiveTheme,
+  subscribeActiveTheme,
+} from '../world/activeTheme';
 
 // The whole page is the world: one full-window canvas, nothing around it.
 //
@@ -10,10 +15,15 @@ import { TownCanvas } from '../world/TownCanvas';
 // <h1> is visually hidden: the page still needs a title for screen readers and
 // search engines, but the picture is the experience.
 export function App() {
+  const theme = useSyncExternalStore(
+    subscribeActiveTheme,
+    getActiveTheme,
+    getActiveTheme,
+  );
   return (
     <main className="world-viewport">
       <h1 className="sr-only">Mayn&apos;s World</h1>
-      <TownCanvas />
+      <TownCanvas theme={theme} />
     </main>
   );
 }

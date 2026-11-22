@@ -27,12 +27,14 @@ function contrast(a: string, b: string): number {
 describe('theme registry', () => {
   it('registers every theme under its own id', () => {
     for (const [id, theme] of Object.entries(themes)) {
+      if (!theme) continue;
       expect(theme.id).toBe(id);
     }
   });
 
   it('gives every theme a valid #rrggbb value for every colour', () => {
     for (const theme of Object.values(themes)) {
+      if (!theme) continue;
       for (const name of [...SCENE_COLORS, ...UI_COLORS]) {
         expect(theme.colors[name], `${theme.id}.${name}`).toMatch(/^#[0-9a-f]{6}$/i);
       }
@@ -43,6 +45,7 @@ describe('theme registry', () => {
 describe('building materials', () => {
   it('are valid #rrggbb colours in every theme', () => {
     for (const theme of Object.values(themes)) {
+      if (!theme) continue;
       for (const name of MATERIAL_NAMES) expect(theme.materials[name], `${theme.id}.${name}`).toMatch(/^#[0-9a-f]{6}$/i);
     }
   });
@@ -66,7 +69,11 @@ describe('themeVariables', () => {
 // Every theme must meet these, so a new palette cannot quietly ship unreadable
 // text. 4.5 is WCAG AA for normal text; 3 is AA for focus indicators and other
 // non-text UI.
-describe.each(Object.values(themes))('contrast in $name', (theme) => {
+const registeredThemes = Object.values(themes).filter(
+  (theme): theme is NonNullable<typeof theme> => theme !== undefined,
+);
+
+describe.each(registeredThemes)('contrast in $name', (theme) => {
   const c = (name: ColorName) => theme.colors[name];
 
   const textPairs: [ColorName, ColorName][] = [
