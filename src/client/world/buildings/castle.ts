@@ -18,10 +18,10 @@ import {
 import { mix } from '../render/terrainPalette';
 import { type Origin, at } from './geometry';
 import type { BuildingPalette, Tone } from './palette';
-import { box, doorPlacement } from './painter';
+import { box, doorPlacement, paintRoofEffects } from './painter';
 import { cone, cylinder, onCylinder } from './solids';
 import type { MaterialName } from '../themes';
-import { hash2 } from './random';
+import { hash2, seededWindowLit } from './random';
 
 export const CASTLE_KINDS: readonly string[] = ['tower', 'keep', 'gate'];
 
@@ -120,7 +120,7 @@ function triangleCourses(ctx: CanvasRenderingContext2D, tip: ScreenPoint, left: 
 }
 
 // A four-sided pointed roof over a rectangle.
-function pyramid(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: number, x1: number, y1: number, z: number, rise: number, tone: Tone): void {
+function pyramid(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: number, x1: number, y1: number, z: number, rise: number, tone: Tone, pal: BuildingPalette): void {
   const apex = at(o, (x0 + x1) / 2, (y0 + y1) / 2, z + rise);
   const sw = at(o, x0, y1, z);
   const se = at(o, x1, y1, z);
@@ -130,10 +130,12 @@ function pyramid(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: numbe
   triangleCourses(ctx, apex, sw, se, tone);
   triangleCourses(ctx, apex, se, ne, tone);
   strokeLine(ctx, se, apex, tone.dark, 0.8);
+  const seed = Math.round(x0 * 31 + y0 * 17 + x1 * 7 + y1 * 13 + z + rise);
+  paintRoofEffects(ctx, pal, seed, [[sw, se], [se, ne]], [sw, apex]);
 }
 
 // A hipped roof over a rectangle: a ridge along the longer side, two sloped ends.
-function hipRoof(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: number, x1: number, y1: number, z: number, rise: number, tone: Tone): void {
+function hipRoof(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: number, x1: number, y1: number, z: number, rise: number, tone: Tone, pal: BuildingPalette): void {
   const w = x1 - x0;
   const d = y1 - y0;
   const half = Math.min(w, d) / 2;
@@ -162,6 +164,8 @@ function hipRoof(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: numbe
   }
   strokeLine(ctx, se, rb, tone.dark, 0.8);
   strokeLine(ctx, ra, rb, tone.light, 0.8);
+  const seed = Math.round(x0 * 31 + y0 * 17 + x1 * 7 + y1 * 13 + z + rise);
+  paintRoofEffects(ctx, pal, seed, [[sw, se], [se, ne], [ra, rb]], [sw, ra]);
 }
 
 // Narrow arrow-slit windows on both visible faces.
@@ -296,18 +300,19 @@ function paintTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: 
   const degs = [20, 62, 105, 40, 84];
   zs.forEach((z, i) => {
     const p = onCylinder(o, cx, cy, r, degs[i % degs.length]!, z);
-    fillPixelRect(ctx, p.sx - 1, p.sy - 6, 2, 6, pal.glass.dark);
+    const glass = seededWindowLit(b.id, 'south', i, pal.windowFraction) ? pal.windowLight : pal.glass.dark;
+    fillPixelRect(ctx, p.sx - 1, p.sy - 6, 2, 6, glass);
   });
   if (spec.style === 'crown') {
     crown(ctx, o, cx, cy, r, spec.body + 4, pal);
     banner(ctx, at(o, cx, cy, spec.body + 4), 16, pal);
   } else if (spec.style === 'cone') {
-    cone(ctx, o, cx, cy, r + 0.2, spec.body + 4, 34, pal.m[spec.roof]);
+    cone(ctx, o, cx, cy, r + 0.2, spec.body + 4, 34, pal.m[spec.roof], { color: pal.snowColor, cover: pal.snowCover });
     banner(ctx, at(o, cx, cy, spec.body + 36), 9, pal);
   } else if (spec.style === 'square') {
     box(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body, spec.body + 5, stone, stone.light);
     battlements(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body + 5, stone, 0.42);
-    pyramid(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body + 9, 18, pal.m[spec.roof]);
+    pyramid(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body + 9, 18, pal.m[spec.roof], pal);
   } else {
     box(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body, spec.body + 8, pal.m.doorWood);
     cylinder(ctx, o, cx, cy, r, spec.body + 8, spec.body + 12, stone);
@@ -331,15 +336,21 @@ function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
   for (const x of [0.2, w * 0.5 - 0.2, w - 0.9]) box(ctx, o, x - 0.1, d - fb - 0.12, x + 0.5, d - fb, 0, BODY - 4, stone, stone.light);
   for (const y of [0.9, d * 0.35]) box(ctx, o, w - 0.2, y, w - 0.08, y + 0.5, 0, BODY - 4, stone, stone.light);
   // Two rows of tall arched windows, narrow lancets above.
-  for (const row of [28, 52]) {
-    for (const t of [0.14, 0.3, 0.7, 0.86]) {
+  for (const [rowIndex, row] of [28, 52].entries()) {
+    for (const [windowIndex, t] of [0.14, 0.3, 0.7, 0.86].entries()) {
       const u = 0.2 + (w - 0.4) * t;
-      fillPolygon(ctx, [at(o, u - 0.1, d - fb, row), at(o, u + 0.1, d - fb, row), at(o, u + 0.1, d - fb, row + 9), at(o, u - 0.1, d - fb, row + 9)], pal.glass.lit);
-      fillPolygon(ctx, [at(o, u - 0.1, d - fb, row + 9), at(o, u + 0.1, d - fb, row + 9), at(o, u, d - fb, row + 12.5)], pal.glass.lit);
+      const glass = seededWindowLit(b.id, 'south', rowIndex * 10 + windowIndex, pal.windowFraction)
+        ? pal.windowLight
+        : pal.glass.lit;
+      fillPolygon(ctx, [at(o, u - 0.1, d - fb, row), at(o, u + 0.1, d - fb, row), at(o, u + 0.1, d - fb, row + 9), at(o, u - 0.1, d - fb, row + 9)], glass);
+      fillPolygon(ctx, [at(o, u - 0.1, d - fb, row + 9), at(o, u + 0.1, d - fb, row + 9), at(o, u, d - fb, row + 12.5)], glass);
     }
-    for (const t of [0.3, 0.7]) {
+    for (const [windowIndex, t] of [0.3, 0.7].entries()) {
       const v = 0.2 + (d - fb - 0.4) * t;
-      fillPolygon(ctx, [at(o, w - 0.2, v - 0.1, row), at(o, w - 0.2, v + 0.1, row), at(o, w - 0.2, v + 0.1, row + 9), at(o, w - 0.2, v - 0.1, row + 9)], pal.glass.shade);
+      const glass = seededWindowLit(b.id, 'east', rowIndex * 10 + windowIndex, pal.windowFraction)
+        ? pal.windowLight
+        : pal.glass.shade;
+      fillPolygon(ctx, [at(o, w - 0.2, v - 0.1, row), at(o, w - 0.2, v + 0.1, row), at(o, w - 0.2, v + 0.1, row + 9), at(o, w - 0.2, v - 0.1, row + 9)], glass);
     }
   }
   // Belt course.
@@ -378,7 +389,7 @@ function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
     const u = ux0 + (ux1 - ux0) * t;
     fillPolygon(ctx, [at(o, u - 0.08, uy1, BODY + 10), at(o, u + 0.08, uy1, BODY + 10), at(o, u + 0.08, uy1, BODY + 19), at(o, u - 0.08, uy1, BODY + 19)], pal.glass.dark);
   }
-  hipRoof(ctx, o, ux0 - 0.15, uy0 - 0.15, ux1 + 0.15, uy1 + 0.15, BODY + 24, 32, slate);
+  hipRoof(ctx, o, ux0 - 0.15, uy0 - 0.15, ux1 + 0.15, uy1 + 0.15, BODY + 24, 32, slate, pal);
 
   // Round corner turrets taller than the parapet, with terracotta cones. Far ones first.
   const corners: [number, number][] = [[0.5, 0.5], [w - 0.5, 0.5], [0.5, d - fb - 0.1], [w - 0.5, d - fb - 0.1]];
@@ -388,7 +399,7 @@ function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
       cylinder(ctx, o, cx, cy, 0.62, 0, BODY + 18, stone);
       cylinderCourses(ctx, o, cx, cy, 0.62, 0, BODY + 18, stone);
       cylinder(ctx, o, cx, cy, 0.7, BODY + 18, BODY + 22, stone);
-      cone(ctx, o, cx, cy, 0.78, BODY + 22, 20, index < 2 ? pal.m.roofRed : pal.m.roofSlate);
+      cone(ctx, o, cx, cy, 0.78, BODY + 22, 20, index < 2 ? pal.m.roofRed : pal.m.roofSlate, { color: pal.snowColor, cover: pal.snowCover });
     });
   banner(ctx, at(o, w / 2, (d - fb) / 2, BODY + 58), 16, pal);
 }
@@ -411,7 +422,7 @@ function paintGateTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, p
     const p = onCylinder(o, cx, cy, r, deg, 18);
     fillPixelRect(ctx, p.sx - 1, p.sy - 6, 2, 6, pal.glass.dark);
   }
-  cone(ctx, o, cx, cy, r + 0.1, 30, 16, pal.m.roofSlate);
+  cone(ctx, o, cx, cy, r + 0.1, 30, 16, pal.m.roofSlate, { color: pal.snowColor, cover: pal.snowCover });
 }
 
 function paintGate(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: BuildingPalette): void {
@@ -434,7 +445,7 @@ function paintGate(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
   // Corbelled parapet, battlements, then a low slate roof set inside and a banner.
   box(ctx, o, -0.06, -0.06, w + 0.06, d + 0.06, H, H + 4, stone, stone.light);
   battlements(ctx, o, -0.06, -0.06, w + 0.06, d + 0.06, H + 4, stone, 0.45);
-  hipRoof(ctx, o, 0.25, 0.25, w - 0.25, d - 0.25, H + 4, 9, pal.m.roofSlate);
+  hipRoof(ctx, o, 0.25, 0.25, w - 0.25, d - 0.25, H + 4, 9, pal.m.roofSlate, pal);
   banner(ctx, at(o, w / 2, d / 2, H + 13), 10, pal);
 }
 

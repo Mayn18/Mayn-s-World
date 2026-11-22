@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultTheme } from '../themes';
+import { defaultTheme, themes } from '../themes';
 import { WATER_STEPS, mix, terrainPalette } from './terrainPalette';
 
 describe('mix', () => {
@@ -72,6 +72,24 @@ describe('terrainPalette roads', () => {
     }
     expect(brightness(roads.surface.plazaEdge)).toBeLessThan(brightness(roads.surface.plaza));
     expect(brightness(roads.surface.plazaEdge)).toBeGreaterThan(brightness(roads.surface.main));
+  });
+
+  describe('theme-specific terrain parameters', () => {
+    it('passes wetness into darker rain roads and deterministic puddle tuning', () => {
+      const rainy = terrainPalette(themes['rainy-evening']);
+      const dry = terrainPalette(defaultTheme);
+      expect(rainy.wetness).toBe(0.8);
+      expect(rainy.puddleDensity).toBe(0.065);
+      expect(brightness(rainy.roads.surface.main)).toBeLessThan(brightness(dry.roads.surface.main));
+      expect(rainy.frozenWater).toBe(false);
+    });
+
+    it('passes winter snow cover and frozen-water parameters to the terrain painter', () => {
+      const winter = terrainPalette(themes['snowy-cabin']);
+      expect(winter.snowCover).toBe(0.9);
+      expect(winter.frozenWater).toBe(true);
+      expect(brightness(winter.top[0]!)).toBeGreaterThan(brightness(terrainPalette(defaultTheme).top[0]!));
+    });
   });
 
   it('draws the kerb darker than the street it edges', () => {

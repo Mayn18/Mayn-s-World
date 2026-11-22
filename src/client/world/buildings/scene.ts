@@ -150,7 +150,7 @@ export function buildScene(
     const out = new Map<number, ShadowSpan[]>();
     for (const caster of casters) {
       const baseLength = Math.min(2.6, Math.max(0.7, caster.height / 22));
-      const length = baseLength * theme.shadow.lengthScale;
+      const length = Math.min(3.5, baseLength * theme.shadow.lengthScale);
       const { x: x0, y: y0, w, d, level } = caster;
       const from = x0 + w;
       const to = from + length;

@@ -3,10 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
 import './styles.css';
 import { applyTheme } from './world/themes';
-import { getActiveTheme } from './world/activeTheme';
+import { getActiveTheme, restoreActiveTheme } from './world/activeTheme';
 
-// Set the colours before React renders anything, so the first paint is already
-// themed. Theme choice and saving it come later (Phase 4); for now there is one.
+restoreActiveTheme();
 applyTheme(document.documentElement, getActiveTheme());
 
 const container = document.getElementById('root');

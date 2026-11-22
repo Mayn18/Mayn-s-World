@@ -86,6 +86,7 @@ export function cone(
   z: number,
   rise: number,
   tone: Tone,
+  snow?: { color: string; cover: number },
 ): void {
   const { rx, ry } = ellipseRadii(r);
   const base = at(o, cx, cy, z);
@@ -116,6 +117,14 @@ export function cone(
   }
   strokePixelPolygon(ctx, roof, tone.dark);
   strokePixelLine(ctx, apex, { sx: base.sx + rx * 0.12, sy: base.sy + ry }, tone.dark);
+  if (snow && snow.cover > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.94, snow.cover * 0.9);
+    strokePixelLine(ctx, { sx: base.sx - rx, sy: base.sy }, apex, snow.color, 3);
+    strokePixelLine(ctx, apex, { sx: base.sx + rx, sy: base.sy }, snow.color, 3);
+    strokePixelPolygon(ctx, ellipsePoints(base.sx, base.sy, rx, ry, 0, Math.PI * 2), snow.color, 3);
+    ctx.restore();
+  }
 }
 
 // A point on a cylinder's surface facing the viewer: angle 0 is east, 90 degrees is south.

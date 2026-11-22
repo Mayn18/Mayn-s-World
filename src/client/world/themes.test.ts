@@ -26,15 +26,21 @@ function contrast(a: string, b: string): number {
 
 describe('theme registry', () => {
   it('registers every theme under its own id', () => {
+    expect(Object.keys(themes).sort()).toEqual([
+      'cozy-night',
+      'daytime-meadow',
+      'enchanted-forest',
+      'rainy-evening',
+      'snowy-cabin',
+      'sunset-dream',
+    ]);
     for (const [id, theme] of Object.entries(themes)) {
-      if (!theme) continue;
       expect(theme.id).toBe(id);
     }
   });
 
   it('gives every theme a valid #rrggbb value for every colour', () => {
     for (const theme of Object.values(themes)) {
-      if (!theme) continue;
       for (const name of [...SCENE_COLORS, ...UI_COLORS]) {
         expect(theme.colors[name], `${theme.id}.${name}`).toMatch(/^#[0-9a-f]{6}$/i);
       }
@@ -45,9 +51,40 @@ describe('theme registry', () => {
 describe('building materials', () => {
   it('are valid #rrggbb colours in every theme', () => {
     for (const theme of Object.values(themes)) {
-      if (!theme) continue;
       for (const name of MATERIAL_NAMES) expect(theme.materials[name], `${theme.id}.${name}`).toMatch(/^#[0-9a-f]{6}$/i);
     }
+  });
+
+  it('defines bounded painter parameters for lighting and surface states', () => {
+    for (const theme of Object.values(themes)) {
+      expect(theme.keyLight.intensity).toBeGreaterThanOrEqual(0);
+      expect(theme.keyLight.intensity).toBeLessThanOrEqual(1.2);
+      expect(theme.keyLight.elevationDeg).toBeGreaterThanOrEqual(0);
+      expect(theme.keyLight.elevationDeg).toBeLessThanOrEqual(90);
+      expect(theme.surface.wetness).toBeGreaterThanOrEqual(0);
+      expect(theme.surface.wetness).toBeLessThanOrEqual(1);
+      expect(theme.surface.snowCover).toBeGreaterThanOrEqual(0);
+      expect(theme.surface.snowCover).toBeLessThanOrEqual(1);
+      expect(theme.emissive.windowFraction).toBeGreaterThanOrEqual(0);
+      expect(theme.emissive.windowFraction).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('keeps the Daytime Meadow palette and shadow baseline unchanged', () => {
+    expect(defaultTheme.colors).toMatchObject({
+      skyTop: '#8fc8ee',
+      skyMid: '#c8e7f4',
+      skyLow: '#dff0fb',
+      grass: '#6fae4a',
+      outline: '#414357',
+    });
+    expect(defaultTheme.materials.roofRed).toBe('#b66649');
+    expect(defaultTheme.shadow).toEqual({
+      color: '#3a3d6a',
+      opacity: 0.34,
+      lengthScale: 0.85,
+      edgeSteps: 2,
+    });
   });
 });
 
@@ -106,7 +143,8 @@ describe.each(registeredThemes)('contrast in $name', (theme) => {
     'hillNear',
     'path',
   ];
-  it.each(focusBackgrounds)('focus ring on %s is at least 3:1', (background) => {
-    expect(contrast(c('focus'), c(background))).toBeGreaterThanOrEqual(3);
+  it.each(focusBackgrounds)('two-tone focus ring on %s has a contrasting edge', (background) => {
+    expect(Math.max(contrast(c('focus'), c(background)), contrast(c('focusContrast'), c(background))))
+      .toBeGreaterThanOrEqual(3);
   });
 });

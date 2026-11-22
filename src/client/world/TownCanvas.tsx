@@ -36,7 +36,7 @@ import { townModel } from './terrain/town';
 import { buildScene } from './buildings/scene';
 import { buildDecorLayer } from './decor/layer';
 import { townBuildings, townDecor, townWalls } from './data/loader';
-import { defaultTheme, type Theme } from './themes';
+import { defaultTheme, themes, type Theme, type ThemeId } from './themes';
 import {
   getActiveTheme,
   getLastThemeSwitchStartedAt,
@@ -62,6 +62,20 @@ interface TerrainCacheBuild extends TerrainCanvasCache {
 
 const CACHE_BUILD_BUDGET_MS = 3;
 const CACHE_BUILD_TILE_BATCH = 8;
+
+interface ThemeCacheMetrics {
+  oneXMs: number[];
+  upgradeMs: number[];
+  oneXBytes: number;
+  highTierBytes: number;
+}
+
+function createThemeCacheMetrics(): Record<ThemeId, ThemeCacheMetrics> {
+  return Object.values(themes).reduce((metrics, theme) => {
+    metrics[theme.id] = { oneXMs: [], upgradeMs: [], oneXBytes: 0, highTierBytes: 0 };
+    return metrics;
+  }, {} as Record<ThemeId, ThemeCacheMetrics>);
+}
 
 function releaseCacheCanvas(cache: TerrainCanvasCache | TerrainCacheBuild | null): void {
   if (cache) {
@@ -247,6 +261,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     parityTheme: null as Theme | null,
     rebuilds: 0,
     peakOffscreenBytes: 0,
+    themeBuilds: createThemeCacheMetrics(),
   });
 
   // The picture's own size and where it starts in projection space. Fixed for the
@@ -365,6 +380,9 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
             const elapsed = performance.now() - upgradeStartedAt;
             devMetricsRef.current.upgradeWallMs.push(elapsed);
             devMetricsRef.current.upgradeSlices.push(upgradeSlices);
+            const themeMetrics = devMetricsRef.current.themeBuilds[theme.id];
+            themeMetrics.upgradeMs.push(elapsed);
+            themeMetrics.highTierBytes = build.canvas.width * build.canvas.height * 4;
             const switchStart = getLastThemeSwitchStartedAt();
             if (switchStart !== null) {
               devMetricsRef.current.switchToUpgradeMs.push(performance.now() - switchStart);
@@ -459,6 +477,8 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
       if (import.meta.env.DEV) {
         const elapsed = performance.now() - buildStartedAt;
         devMetricsRef.current.coldBuildMs.push(elapsed);
+        const themeMetrics = devMetricsRef.current.themeBuilds[theme.id];
+        themeMetrics.oneXMs.push(elapsed);
         devMetricsRef.current.rebuilds = getThemeRebuildCounter();
         const checksum = fnv1a(cacheCanvas);
         devMetricsRef.current.parityChecksum = checksum;
@@ -468,6 +488,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
           devMetricsRef.current.switchToOneMs.push(performance.now() - switchStart);
         }
         const bytes = cacheCanvas.width * cacheCanvas.height * 4;
+        themeMetrics.oneXBytes = bytes;
         devMetricsRef.current.peakOffscreenBytes =
           Math.max(devMetricsRef.current.peakOffscreenBytes, bytes);
         console.info(
@@ -600,6 +621,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
         devMetricsRef.current.upgradeSlices = [];
         devMetricsRef.current.switchToOneMs = [];
         devMetricsRef.current.switchToUpgradeMs = [];
+        devMetricsRef.current.themeBuilds = createThemeCacheMetrics();
         devMetricsRef.current.rebuilds = getThemeRebuildCounter();
         devMetricsRef.current.peakOffscreenBytes = 0;
       },
@@ -627,6 +649,17 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
           upgradeSlices: medians(devMetricsRef.current.upgradeSlices),
           switchToOne: medians(devMetricsRef.current.switchToOneMs),
           switchToUpgrade: medians(devMetricsRef.current.switchToUpgradeMs),
+          themeBuilds: Object.fromEntries(
+            Object.entries(devMetricsRef.current.themeBuilds).map(([id, metrics]) => [
+              id,
+              {
+                oneX: medians(metrics.oneXMs),
+                upgrade: medians(metrics.upgradeMs),
+                oneXBytes: metrics.oneXBytes,
+                highTierBytes: metrics.highTierBytes,
+              },
+            ]),
+          ),
           parityChecksum: devMetricsRef.current.parityChecksum,
           tier: cache
             ? {

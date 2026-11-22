@@ -15,7 +15,7 @@ import {
 } from '../render/pixelArt';
 import { mix } from '../render/terrainPalette';
 import { type Origin, at } from './geometry';
-import { hash2, seededToggle } from './random';
+import { hash2, seededToggle, seededWindowLit } from './random';
 import { formTone, type BuildingPalette, type Tone } from './palette';
 import type { Appearance, Extra, Volume } from './style';
 
@@ -160,7 +160,7 @@ function paintWalls(
 
   for (const face of ['south', 'east'] as const) {
     const lit = face === 'south';
-    const wallFaceTone = formTone(wall, lit ? 'left' : 'right');
+    const wallFaceTone = formTone(wall, lit ? 'left' : 'right', pal.lightExposure);
     const lo = face === 'south' ? vol.x0 : vol.y0;
     const hi = face === 'south' ? vol.x1 : vol.y1;
     // The wall itself.
@@ -249,7 +249,11 @@ function paintWalls(
           fillPolygon(ctx, wallQuad(o, vol, face, u - WIN_HALF, u + WIN_HALF, z0, z1), lit ? timber.lit : timber.shade);
           // Dark 1 lp reveal inside the frame, with no soft blur or outline.
           fillPolygon(ctx, wallQuad(o, vol, face, u - WIN_HALF + 0.03, u - WIN_HALF + 0.11, z0 + 0.7, z1 - 0.7), pal.outline);
-          fillPolygon(ctx, wallQuad(o, vol, face, u - WIN_HALF + 0.11, u + WIN_HALF - 0.11, z0 + 0.7, z1 - 0.7), lit ? glass.lit : glass.shade);
+          const windowIndex = f * 101 + Math.round(u * 20);
+          const windowGlass = seededWindowLit(seed, face, windowIndex, pal.windowFraction)
+            ? mix(lit ? glass.lit : glass.shade, pal.windowLight, 0.82)
+            : lit ? glass.lit : glass.shade;
+          fillPolygon(ctx, wallQuad(o, vol, face, u - WIN_HALF + 0.11, u + WIN_HALF - 0.11, z0 + 0.7, z1 - 0.7), windowGlass);
           // a thin sill
           fillPolygon(ctx, wallQuad(o, vol, face, u - WIN_HALF - 0.025, u + WIN_HALF + 0.025, z0 - 0.7, z0), lit ? wall.light : wall.lit);
         }
@@ -309,6 +313,27 @@ function paintDoor(
   }
 }
 
+export function paintRoofEffects(
+  ctx: CanvasRenderingContext2D,
+  pal: BuildingPalette,
+  seed: number,
+  snowEdges: readonly (readonly [ScreenPoint, ScreenPoint])[],
+  sheenEdge: readonly [ScreenPoint, ScreenPoint] | null,
+): void {
+  if (pal.wetness > 0.15 && sheenEdge && hash2(seed, 902, 419) < 0.72) {
+    ctx.save();
+    ctx.globalAlpha = pal.wetness * 0.42;
+    strokeLine(ctx, sheenEdge[0], sheenEdge[1], pal.wetSheen, 1.5);
+    ctx.restore();
+  }
+  if (pal.snowCover > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.94, pal.snowCover * 0.9);
+    for (const [from, to] of snowEdges) strokeLine(ctx, from, to, pal.snowColor, 3);
+    ctx.restore();
+  }
+}
+
 // Roof planes and ridge lines. Returns nothing: heights come from roofHeightAt.
 function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: Appearance, pal: BuildingPalette, seed: number): void {
   const roofTone = pal.m[vol.roof ?? app.roof];
@@ -329,6 +354,16 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
     // the roof floor, inset from the parapet
     const i = 0.1;
     fillPolygon(ctx, [P(vol.x0 + i, vol.y0 + i, H + rim), P(vol.x1 - i, vol.y0 + i, H + rim), P(vol.x1 - i, vol.y1 - i, H + rim), P(vol.x0 + i, vol.y1 - i, H + rim)], roofTone.lit);
+    const corners = [
+      P(vol.x0 + i, vol.y1 + i, H + rim),
+      P(vol.x1 - i, vol.y1 + i, H + rim),
+      P(vol.x1 - i, vol.y0 + i, H + rim),
+      P(vol.x0 + i, vol.y0 + i, H + rim),
+    ];
+    paintRoofEffects(ctx, pal, seed, [
+      [corners[0]!, corners[1]!],
+      [corners[1]!, corners[2]!],
+    ], [corners[0]!, corners[2]!]);
     return;
   }
 
@@ -366,6 +401,7 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
       strokeLine(ctx, rw, re, roofTone.light, 1.3);
       strokeLine(ctx, sw, se, roofTone.dark, 1.1);
       strokeLine(ctx, se, re, roofTone.dark, 0.9);
+      paintRoofEffects(ctx, pal, seed, [[sw, se], [rw, re]], [sw, rw]);
     } else {
       const ridgeCx = cx + ridgeOffset;
       fillPolygon(ctx, [P(vol.x0, vol.y1, H), P(vol.x1, vol.y1, H), P(ridgeCx, vol.y1, H + R * (w / 2) / (w / 2 + ov))], wallTone.lit);
@@ -382,6 +418,7 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
       strokeLine(ctx, rs, rn, roofTone.lit, 1.3);
       strokeLine(ctx, se, ne, roofTone.dark, 1.1);
       strokeLine(ctx, se, rs, roofTone.dark, 0.9);
+      paintRoofEffects(ctx, pal, seed, [[se, ne], [rs, rn]], [se, rs]);
     }
     return;
   }
@@ -410,6 +447,7 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
   strokeLine(ctx, se, ne, roofTone.dark, 1.1);
   strokeLine(ctx, se, ridgeB, roofTone.light, 1); // the hip between the lit and shaded planes
   if (ridgeA.sx !== ridgeB.sx || ridgeA.sy !== ridgeB.sy) strokeLine(ctx, ridgeA, ridgeB, roofTone.light, 1.3);
+  paintRoofEffects(ctx, pal, seed, [[sw, se], [se, ne], [ridgeA, ridgeB]], [sw, ridgeA]);
 }
 
 // A thin wisp of smoke: three pale puffs drifting up and to the right, fading as they

@@ -6,7 +6,7 @@ import { defaultTheme } from '../themes';
 import { worldBounds } from './bounds';
 import { tileCorners } from './projection';
 import { recordingContext } from './recordingContext';
-import { paintTerrain } from './terrainPainter';
+import { hasWetPuddle, paintTerrain } from './terrainPainter';
 import { terrainPalette } from './terrainPalette';
 
 const palette = terrainPalette(defaultTheme);
@@ -19,6 +19,15 @@ function paint(levels: number[][], options = {}) {
 }
 
 describe('paintTerrain', () => {
+  it('places wet-ground puddles deterministically from the tile coordinates', () => {
+    const first = Array.from({ length: 400 }, (_, index) => hasWetPuddle(index % 20, Math.floor(index / 20), 0.16));
+    const second = Array.from({ length: 400 }, (_, index) => hasWetPuddle(index % 20, Math.floor(index / 20), 0.16));
+    expect(second).toEqual(first);
+    expect(first.filter(Boolean).length).toBeGreaterThan(35);
+    expect(first.filter(Boolean).length).toBeLessThan(95);
+    expect(hasWetPuddle(3, 7, 0)).toBe(false);
+  });
+
   it('draws a flat grass tile as its top diamond plus the map-edge skirt', () => {
     const { polygons } = paint([[2]]);
     const colours = polygons.map((p) => p.colour);

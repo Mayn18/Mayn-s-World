@@ -47,6 +47,12 @@ export interface TerrainPalette {
   water: readonly string[];
   waterShore: string;
   wallCap: string;
+  wetness: number;
+  snowCover: number;
+  puddleDensity: number;
+  wetSheen: string;
+  puddleColor: string;
+  frozenWater: boolean;
   faces: Record<FaceKind, FaceColours>;
   roads: RoadColours;
 }
@@ -81,33 +87,43 @@ function material(base: string, ink: string): FaceColours {
 
 export function terrainPalette(theme: Theme): TerrainPalette {
   const c = theme.colors;
+  const wetness = Math.max(0, Math.min(1, theme.surface.wetness));
+  const snowCover = Math.max(0, Math.min(1, theme.surface.snowCover));
   // Higher ground gets steadily lighter, so the height of the land can be read
   // from colour alone, not only from the cliff faces.
   // Lowland is a deeper, lusher green; the highest ground is paler and drier.
   const lowest = mix(c.grassDark, c.leafDark, 0.3);
   const highest = mix(c.grassLight, c.wall, 0.28);
+  const snowGround = mix(c.cloud, c.skyLow, 0.12);
   const top = Array.from({ length: LEVEL_COUNT }, (_, level) => {
     const ground = mix(lowest, highest, Math.min(level, BASE_LEVELS - 1) / (BASE_LEVELS - 1));
     // Above the meadow's own levels is the castle hill. Its lawn is cooled and
     // darkened by about 10-15% so the pale stone castle reads against it.
-    return level < BASE_LEVELS ? ground : mix(ground, c.outline, 0.2 + 0.05 * (level - BASE_LEVELS));
+    const terrain = level < BASE_LEVELS ? ground : mix(ground, c.outline, 0.2 + 0.05 * (level - BASE_LEVELS));
+    return mix(terrain, snowGround, snowCover * 0.8);
   });
 
   // Pale at the shore, deeper towards the middle of the river.
   const shallow = mix(c.glass, c.cloud, 0.3);
   const deep = mix(c.glass, c.outline, 0.22);
-  const water = Array.from({ length: WATER_STEPS }, (_, i) =>
-    mix(shallow, deep, i / (WATER_STEPS - 1)),
+  const water = Array.from({ length: WATER_STEPS }, (_, i) => {
+    const colour = mix(shallow, deep, i / (WATER_STEPS - 1));
+    return theme.water.frozen ? mix(colour, theme.water.reflection, 0.62) : colour;
+  },
   );
 
   const castleBase = mix(mix(c.stone, c.outline, 0.12), c.wall, 0.28);
 
   // Paving runs from pale stone (the square) to packed earth (tracks), all in the
   // warm family of the theme's path colours so it reads as one restrained set.
-  const main = mix(c.path, c.pathEdge, 0.25);
-  const lane = mix(main, c.pathEdge, 0.18);
-  const path = mix(c.pathEdge, c.wood, 0.25);
-  const track = mix(path, c.woodDark, 0.2);
+  const wetRoad = (colour: string) => mix(colour, c.outline, wetness * 0.14);
+  const mainBase = mix(c.path, c.pathEdge, 0.25);
+  const main = wetRoad(mainBase);
+  const lane = wetRoad(mix(mainBase, c.pathEdge, 0.18));
+  const pathBase = mix(c.pathEdge, c.wood, 0.25);
+  const path = wetRoad(pathBase);
+  const track = wetRoad(mix(pathBase, c.woodDark, 0.2));
+  const plaza = wetRoad(mix(c.path, c.cloud, 0.1));
   const kerb = mix(c.pathEdge, c.outline, 0.25);
   const ramp = (base: string): FaceColours => ({
     lit: mix(base, c.outline, 0.1),
@@ -121,8 +137,16 @@ export function terrainPalette(theme: Theme): TerrainPalette {
   return {
     top,
     water,
-    waterShore: mix(c.glass, c.cloud, 0.75),
-    wallCap: c.wall,
+    waterShore: theme.water.frozen
+      ? mix(c.glass, theme.water.reflection, 0.82)
+      : mix(c.glass, c.cloud, 0.75),
+    wallCap: mix(c.wall, snowGround, snowCover * 0.7),
+    wetness,
+    snowCover,
+    puddleDensity: Math.max(0, Math.min(1, theme.surface.puddleDensity)),
+    wetSheen: mix(theme.water.reflection, c.cloud, 0.35),
+    puddleColor: mix(theme.water.reflection, c.cloud, 0.18),
+    frozenWater: theme.water.frozen,
     faces: {
       // A grass bank: green, a little darker than the grass above it.
       slope: material(mix(c.grass, c.grassDark, 0.35), c.outline),
@@ -145,8 +169,8 @@ export function terrainPalette(theme: Theme): TerrainPalette {
       surface: {
         // A warm pale stone, a step below plaster and more neutral, so the square
         // reads as paving rather than a hole in the picture.
-        plaza: mix(c.path, c.cloud, 0.1),
-        plazaEdge: mix(mix(c.path, c.cloud, 0.1), lane, 0.16),
+        plaza,
+        plazaEdge: mix(plaza, lane, 0.16),
         main,
         lane,
         path,

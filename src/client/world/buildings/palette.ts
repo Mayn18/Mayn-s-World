@@ -33,6 +33,18 @@ export interface BuildingPalette {
   grassDark: string;
   wood: string;
   woodDark: string;
+  lightExposure: number;
+  windowLight: string;
+  windowFraction: number;
+  lampColor: string;
+  lampPoolStrength: number;
+  lampPoolRadius: number;
+  wetness: number;
+  snowCover: number;
+  snowColor: string;
+  wetSheen: string;
+  accentColor: string;
+  accentStrength: number;
 }
 
 export type FormFace = 'top' | 'left' | 'right';
@@ -66,19 +78,21 @@ export function curvedTone(base: Tone): readonly [string, string, string] {
   ];
 }
 
-function tone(base: string, ink: string, white: string): Tone {
+function tone(base: string, ink: string, light: string, lightStrength: number): Tone {
   return {
     lit: base,
     shade: mix(base, ink, 0.32),
     dark: mix(base, ink, 0.52),
-    light: mix(base, white, 0.34),
+    light: mix(base, light, lightStrength),
   };
 }
 
 export function buildingPalette(theme: Theme): BuildingPalette {
   const c = theme.colors;
   const m = {} as Record<MaterialName, Tone>;
-  for (const name of MATERIAL_NAMES) m[name] = tone(theme.materials[name], c.outline, c.flowerWhite);
+  for (const name of MATERIAL_NAMES) {
+    m[name] = tone(theme.materials[name], c.outline, theme.keyLight.color, 0.34 * theme.keyLight.intensity);
+  }
   const glassBase = mix(c.glass, c.wall, 0.08);
   return {
     m,
@@ -86,7 +100,7 @@ export function buildingPalette(theme: Theme): BuildingPalette {
       lit: mix(glassBase, c.cloud, 0.1),
       shade: mix(glassBase, c.outline, 0.3),
       dark: mix(glassBase, c.outline, 0.55),
-      light: mix(glassBase, c.flowerWhite, 0.6),
+      light: mix(glassBase, theme.keyLight.color, 0.6),
     },
     outline: c.outline,
     white: c.flowerWhite,
@@ -101,5 +115,17 @@ export function buildingPalette(theme: Theme): BuildingPalette {
     grassDark: c.grassDark,
     wood: c.wood,
     woodDark: c.woodDark,
+    lightExposure: theme.keyLight.intensity,
+    windowLight: theme.emissive.windowColor,
+    windowFraction: theme.emissive.windowFraction,
+    lampColor: theme.emissive.lampColor,
+    lampPoolStrength: theme.emissive.poolStrength,
+    lampPoolRadius: theme.emissive.poolRadius,
+    wetness: theme.surface.wetness,
+    snowCover: theme.surface.snowCover,
+    snowColor: mix(c.cloud, c.skyLow, 0.12),
+    wetSheen: mix(theme.water.reflection, c.cloud, 0.35),
+    accentColor: theme.accent.color,
+    accentStrength: theme.accent.strength,
   };
 }

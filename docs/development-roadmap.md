@@ -76,16 +76,16 @@ Remaining:
 
 Acceptance: visitors can reach every core destination without avatar movement. Met for navigation to the placeholder panels; the phase stays open until the owner has reviewed it.
 
-## Phase 4 — Pixel UI and theme engine (started)
+## Phase 4 — Pixel UI and theme engine (in progress)
 Done (frontend visual foundation):
-- Centralized theme registry (`src/client/world/themes.ts`): a typed palette becomes CSS variables. One theme exists, Daytime Meadow, with a test that checks its text and focus-ring contrast.
+- Centralized theme registry (`src/client/world/themes.ts`): six complete palettes become CSS variables, with contrast and validity tests. Daytime Meadow remains the visual baseline.
+- Theme selector with all six themes, keyboard and touch-friendly native controls, and saved preference restoration with a safe default fallback.
+- Instant C5 theme switching: the current flattened cache is invalidated and rebuilt; no separate theme cache or transition animation is introduced.
 - Reusable pixel UI: `PixelSprite`, `PixelPanel`, and the `pixel-button` and `pixel-card` styles.
 - A self-hosted pixel heading font.
 
 Remaining:
-- The other five themes (Cozy Night, Rainy Evening, Sunset Dream, Enchanted Forest, Snowy Cabin), each a new palette plus any scene changes.
-- Theme switcher, theme persistence and crossfade.
-- Polish pass on the first theme.
+- Owner review and any requested polish to the theme presentation.
 
 Acceptance: themes change presentation without changing functionality.
 

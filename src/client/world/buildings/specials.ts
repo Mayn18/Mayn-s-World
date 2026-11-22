@@ -10,9 +10,10 @@ import {
 } from '../render/pixelArt';
 import { mix } from '../render/terrainPalette';
 import type { MaterialName } from '../themes';
+import { seededWindowLit } from './random';
 import { type Origin, at } from './geometry';
 import type { BuildingPalette } from './palette';
-import { box } from './painter';
+import { box, paintRoofEffects } from './painter';
 import { cone, cylinder, ellipseRadii } from './solids';
 import type { ScreenPoint } from '../render/projection';
 
@@ -76,8 +77,14 @@ function paintStainedWindow(
   half: number,
   height: number,
   pal: BuildingPalette,
+  seed: number,
+  face: 'south' | 'east',
+  index: number,
 ): void {
-  const glass = mix(pal.glass.shade, pal.m.roofBlue.dark, 0.3);
+  const lit = seededWindowLit(seed, face, index, pal.windowFraction);
+  const glass = lit
+    ? mix(mix(pal.glass.shade, pal.m.roofBlue.dark, 0.3), pal.windowLight, 0.82)
+    : mix(pal.glass.shade, pal.m.roofBlue.dark, 0.3);
   paintChurchArch(ctx, point, centre, bottom, half, height, pal.m.wallStone.light, glass);
   const panelTop = bottom + height * 0.57;
   const paneEdges = [
@@ -86,7 +93,8 @@ function paintStainedWindow(
     centre + half * 0.24,
     centre + half * 0.7,
   ];
-  const panes = [pal.m.roofRed.lit, pal.m.roofBlue.light, pal.m.gold.lit];
+  const panes = [pal.m.roofRed.lit, pal.m.roofBlue.light, pal.m.gold.lit]
+    .map((colour) => lit ? mix(colour, pal.windowLight, 0.38) : colour);
   for (let i = 0; i < panes.length; i++) {
     fillPolygon(ctx, [
       point(paneEdges[i]!, bottom + 2),
@@ -126,6 +134,7 @@ function paintRoseWindow(
   centre: number,
   height: number,
   pal: BuildingPalette,
+  seed: number,
 ): void {
   const outer = rosePoints(point, centre, height, 0.86, 10.2);
   const glass = rosePoints(point, centre, height, 0.68, 8.2);
@@ -133,7 +142,9 @@ function paintRoseWindow(
   fillPolygon(ctx, rosePoints(point, centre, height, 0.77, 9.2), pal.m.wallStone.light);
   fillPolygon(ctx, glass, pal.m.roofBlue.dark);
 
-  const colours = [pal.m.roofRed.lit, pal.m.gold.lit, pal.m.roofBlue.light, pal.glass.lit];
+  const lit = seededWindowLit(seed, 'south', 88, pal.windowFraction);
+  const colours = [pal.m.roofRed.lit, pal.m.gold.lit, pal.m.roofBlue.light, pal.glass.lit]
+    .map((colour) => lit ? mix(colour, pal.windowLight, 0.38) : colour);
   for (let i = 0; i < 8; i++) {
     const a0 = (i / 8) * Math.PI * 2;
     const a1 = ((i + 1) / 8) * Math.PI * 2;
@@ -199,6 +210,7 @@ function paintFacadeTower(
   shaftTop: number,
   spireTop: number,
   pal: BuildingPalette,
+  seed: number,
 ): void {
   const stone = pal.m.wallStone;
   const slate = pal.m.roofSlate;
@@ -218,7 +230,7 @@ function paintFacadeTower(
   ], 7, 12, { line: stone.dark, joint: stone.shade });
 
   const towerCentre = (x0 + x1) / 2;
-  paintStainedWindow(ctx, south, towerCentre, 34, 0.2, 23, pal);
+  paintStainedWindow(ctx, south, towerCentre, 34, 0.2, 23, pal, seed, 'south', 0);
   for (const offset of [-0.24, 0.24]) {
     const centre = towerCentre + offset;
     paintChurchArch(ctx, south, centre, 67, 0.14, 23, stone.light, pal.outline);
@@ -282,7 +294,7 @@ function paintCathedral(ctx: CanvasRenderingContext2D, o: Origin, b: Building, p
     paintGothicButtress(ctx, o, w - 0.2, centre, 0.34, 0.42, wallTop, stone);
   }
   for (const centre of [2.5, 4.85, 7.05]) {
-    paintStainedWindow(ctx, eastWall, centre, 4, 0.28, 22, pal);
+    paintStainedWindow(ctx, eastWall, centre, 4, 0.28, 22, pal, b.id, 'east', Math.round(centre * 10));
   }
 
   const ridgeX = w / 2;
@@ -307,14 +319,19 @@ function paintCathedral(ctx: CanvasRenderingContext2D, o: Origin, b: Building, p
   strokePixelPolygon(ctx, westRoof, slate.dark);
   strokePixelPolygon(ctx, eastRoof, slate.dark);
   strokeLine(ctx, ridgeBack, ridgeFront, slate.light);
-  paintRoseWindow(ctx, southWall, ridgeX, wallTop + 7, pal);
+  paintRoofEffects(ctx, pal, b.id, [
+    [westEaveBack, westEaveFront],
+    [eastEaveBack, eastEaveFront],
+    [ridgeBack, ridgeFront],
+  ], [westEaveFront, ridgeFront]);
+  paintRoseWindow(ctx, southWall, ridgeX, wallTop + 7, pal, b.id);
 
   for (const centre of [0.75, 4.25]) {
-    paintFacadeTower(ctx, o, centre, d - 0.1, 1.2, 1.35, 102, centre < ridgeX ? 162 : 148, pal);
+    paintFacadeTower(ctx, o, centre, d - 0.1, 1.2, 1.35, 102, centre < ridgeX ? 162 : 148, pal, b.id);
   }
 
   for (const centre of [1.55, 3.45]) {
-    paintStainedWindow(ctx, southWall, centre, 25, 0.14, 13, pal);
+    paintStainedWindow(ctx, southWall, centre, 25, 0.14, 13, pal, b.id, 'south', Math.round(centre * 10));
   }
 
   const doorCentre = w / 2;
@@ -335,8 +352,14 @@ function paintCathedral(ctx: CanvasRenderingContext2D, o: Origin, b: Building, p
   box(ctx, o, doorCentre - 0.6, d + 0.6, doorCentre + 0.6, d + 0.82, 0, 1, stone, stone.light);
   for (const offset of [-1.35, 1.35]) {
     const lamp = at(o, doorCentre + offset, d + 1.1, 0);
+    if (pal.lampPoolStrength > 0) {
+      ctx.save();
+      ctx.globalAlpha = pal.lampPoolStrength * 0.3;
+      ellipseAt(ctx, o, doorCentre + offset, d + 1.1, 0, pal.lampPoolRadius, pal.lampColor);
+      ctx.restore();
+    }
     fillPixelRect(ctx, lamp.sx - 1, lamp.sy - 10, 2, 10, pal.m.iron.lit);
-    fillPixelRect(ctx, lamp.sx - 2, lamp.sy - 12, 4, 3, pal.m.gold.lit);
+    fillPixelRect(ctx, lamp.sx - 2, lamp.sy - 12, 4, 3, pal.lampPoolStrength > 0 ? pal.lampColor : pal.m.gold.lit);
   }
 }
 
@@ -422,7 +445,7 @@ function paintBandstand(ctx: CanvasRenderingContext2D, o: Origin, b: Building, p
     const p = at(o, cx + 0.72 * Math.cos(a), cy + 0.72 * Math.sin(a), 4);
     fillPixelRect(ctx, p.sx - 1, p.sy - 18, 2, 18, i < 3 ? pal.m.wallWhite.shade : pal.m.wallWhite.lit);
   }
-  cone(ctx, o, cx, cy, 1.0, 21, 15, pal.m.roofRed);
+  cone(ctx, o, cx, cy, 1.0, 21, 15, pal.m.roofRed, { color: pal.snowColor, cover: pal.snowCover });
   const tip = at(o, cx, cy, 36);
   strokeLine(ctx, tip, { sx: tip.sx, sy: tip.sy - 5 }, pal.m.gold.lit, 0.9);
 }
@@ -435,7 +458,7 @@ function paintWindmill(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pa
   cylinder(ctx, o, cx, cy, 1.3, 0, 6, pal.m.wallStone);
   cylinder(ctx, o, cx, cy, 1.15, 6, 38, wall);
   cylinder(ctx, o, cx, cy, 0.95, 38, 48, wall);
-  cone(ctx, o, cx, cy, 1.08, 48, 15, pal.m.roofBrown);
+  cone(ctx, o, cx, cy, 1.08, 48, 15, pal.m.roofBrown, { color: pal.snowColor, cover: pal.snowCover });
   // sails radiate from a hub on the viewer's side of the cap
   const hub = at(o, cx + 0.62, cy + 0.62, 42);
   const sail = pal.m.wallWhite;

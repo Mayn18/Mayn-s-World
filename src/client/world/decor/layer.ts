@@ -18,7 +18,7 @@ import type { RoadLayer } from '../roads/roadLayer';
 import type { TerrainModel } from '../terrain/model';
 import { type DecorPlan, planDecor, tileKey } from './plan';
 import { paintPlant } from './plants';
-import { type FenceSeg, paintBareWellYard, paintCropRows, paintFence, paintKitchenYard, paintProp, paintVillager, paintWoodpileShedYard } from './props';
+import { type FenceSeg, paintBareWellYard, paintCropRows, paintFence, paintKitchenYard, paintLampPool, paintProp, paintVillager, paintWoodpileShedYard } from './props';
 
 export interface DecorLayer {
   plan: DecorPlan;
@@ -89,6 +89,9 @@ export function buildDecorLayer(
         if (type < 1 / 3) paintKitchenYard(ctx, o, pal, hash2(x, y, 248));
         else if (type < 2 / 3) paintWoodpileShedYard(ctx, o, pal, hash2(x, y, 249));
         else paintBareWellYard(ctx, o, pal, hash2(x, y, 250));
+      }
+      for (const prop of props.get(tileKey(x, y)) ?? []) {
+        if (prop.t === 'lamp') paintLampPool(ctx, o, pal);
       }
     },
     paintStanding(ctx, x, y, pal) {

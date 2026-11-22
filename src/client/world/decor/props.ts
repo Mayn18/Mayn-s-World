@@ -74,9 +74,23 @@ function lamp(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): v
   fillPixelRect(ctx, base.sx - 1, base.sy - 14, 2, 14, pal.m.iron.lit);
   fillPixelRect(ctx, base.sx - 2, base.sy - 2, 4, 2, pal.m.iron.lit);
   fillPixelRect(ctx, base.sx - 2, base.sy - 18, 4, 6, pal.m.gold.dark);
-  ctx.fillStyle = pal.flowers[1]!;
-  fillPixelRect(ctx, base.sx - 2, base.sy - 16, 4, 4, pal.flowers[1]!);
+  fillPixelRect(ctx, base.sx - 2, base.sy - 16, 4, 4, pal.lampPoolStrength > 0 ? pal.lampColor : pal.flowers[1]!);
   fillPixelRect(ctx, base.sx - 3, base.sy - 18, 6, 1, pal.m.iron.shade);
+}
+
+export function paintLampPool(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
+  if (pal.lampPoolStrength <= 0) return;
+  const centre = at(o, 0.5, 0.5, 0);
+  const radius = pal.lampPoolRadius * 14;
+  ctx.save();
+  ctx.globalAlpha = pal.lampPoolStrength * 0.36;
+  fillPolygon(ctx, [
+    { sx: centre.sx - radius, sy: centre.sy },
+    { sx: centre.sx, sy: centre.sy - radius * 0.48 },
+    { sx: centre.sx + radius, sy: centre.sy },
+    { sx: centre.sx, sy: centre.sy + radius * 0.48 },
+  ], pal.lampColor);
+  ctx.restore();
 }
 
 function bench(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, alongX: boolean): void {

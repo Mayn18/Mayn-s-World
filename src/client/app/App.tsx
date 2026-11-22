@@ -4,6 +4,7 @@ import {
   getActiveTheme,
   subscribeActiveTheme,
 } from '../world/activeTheme';
+import { ThemeSelector } from '../components/ThemeSelector';
 
 // The whole page is the world: one full-window canvas, nothing around it.
 //
@@ -24,6 +25,7 @@ export function App() {
     <main className="world-viewport">
       <h1 className="sr-only">Mayn&apos;s World</h1>
       <TownCanvas theme={theme} />
+      <ThemeSelector currentThemeId={theme.id} />
     </main>
   );
 }

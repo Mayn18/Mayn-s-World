@@ -273,6 +273,7 @@ html[data-page-hidden] .ambient-sway {
 :focus-visible {
   outline: 3px solid var(--c-focus);
   outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--c-focus-contrast);
 }
 /* Pixel buttons and cards have a 3px notched border drawn as a shadow, so their
    ring sits further out to stay clear of it. */
@@ -347,6 +348,65 @@ html[data-page-hidden] .ambient-sway {
   color: var(--c-ink);
   background: color-mix(in srgb, var(--c-paper) 88%, transparent);
   pointer-events: none;
+}
+
+.world-theme-selector {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  right: 16px;
+  width: min(224px, calc(100vw - 32px));
+}
+
+.world-theme-toggle {
+  width: 100%;
+  min-height: 48px;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.world-theme-toggle strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.world-theme-options {
+  margin-top: 12px;
+  max-height: calc(100dvh - 92px);
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.world-theme-options[hidden] {
+  display: none;
+}
+
+.world-theme-options ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.world-theme-choice {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  font: inherit;
+  font-family: var(--font-pixel);
+  text-align: left;
+  color: var(--c-ink);
+  background: var(--c-paper-shade);
+  cursor: pointer;
+}
+
+.world-theme-choice:hover,
+.world-theme-choice[aria-pressed='true'] {
+  color: var(--c-accent-ink);
+  background: var(--c-accent);
 }
 
 .world-fallback {

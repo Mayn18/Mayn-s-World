@@ -22,3 +22,13 @@ export function seededRampStep(seed: number, index: number): RampStep {
 export function seededToggle(seed: number, index: number, chance: number): boolean {
   return hash2(seed, index, 211) < chance;
 }
+
+export function seededWindowLit(
+  seed: number,
+  face: 'south' | 'east',
+  index: number,
+  fraction: number,
+): boolean {
+  const faceSeed = face === 'south' ? 271 : 272;
+  return hash2(seed, index, faceSeed) < Math.max(0, Math.min(1, fraction));
+}

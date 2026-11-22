@@ -44,6 +44,43 @@ export interface TileRange {
   end: number;
 }
 
+export function hasWetPuddle(x: number, y: number, density: number): boolean {
+  return density > 0 && hash2(x, y, 417) < density;
+}
+
+function paintWetMark(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  level: number,
+  palette: TerrainPalette,
+  road: boolean,
+): void {
+  const tile = tileCorners(x, y, level);
+  const centre = { sx: (tile[0]!.sx + tile[2]!.sx) / 2, sy: (tile[0]!.sy + tile[2]!.sy) / 2 };
+  ctx.save();
+  ctx.globalAlpha = 0.34 * palette.wetness;
+  if (road) {
+    if (hash2(x, y, 418) < 0.58) {
+      strokeLine(
+        ctx,
+        { sx: centre.sx - 3, sy: centre.sy - 1 },
+        { sx: centre.sx + 3, sy: centre.sy - 1 },
+        palette.wetSheen,
+        1.4,
+      );
+    }
+  } else if (hasWetPuddle(x, y, palette.puddleDensity)) {
+    fillPolygon(ctx, [
+      { sx: centre.sx - 4, sy: centre.sy },
+      { sx: centre.sx, sy: centre.sy - 1.8 },
+      { sx: centre.sx + 4, sy: centre.sy },
+      { sx: centre.sx, sy: centre.sy + 1.8 },
+    ], palette.puddleColor);
+  }
+  ctx.restore();
+}
+
 function paintFace(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -149,6 +186,10 @@ export function paintTerrain(
       }
     }
     if (roads) paintGround(ctx, model, roads, x, y, palette);
+    if (palette.wetness > 0 && !model.terrain.water[y]![x]!) {
+      const kind = roads ? groundKind(model, roads, x, y) : null;
+      if (!roads?.decks[y]![x]!) paintWetMark(ctx, x, y, model.surface[y]![x]!, palette, kind !== null);
+    }
     // Buildings and their shadows are drawn by their own module, tile by tile in
     // this same far-to-near order so they sort correctly against the terrain.
     decorate?.(ctx, x, y);

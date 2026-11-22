@@ -6,6 +6,9 @@ import { SPECIAL_KINDS, specialHeight } from './specials';
 import { doorPlacement, roofHeightAt, windowCentres } from './painter';
 import { REVIEW_IDS, buildScene, wallTiles } from './scene';
 import { appearanceFor, appearanceForTown, familyFor, neighbourRuleHolds } from './styles';
+import { seededWindowLit } from './random';
+import { buildingPalette } from './palette';
+import { themes } from '../themes';
 
 const byId = (id: number) => townBuildings.find((b) => b.id === id)!;
 
@@ -25,6 +28,30 @@ describe('windowCentres', () => {
   it('spaces windows evenly inside the wall', () => {
     const c = windowCentres(0, 4, 1);
     expect(c).toEqual([0.5, 1.5, 2.5, 3.5]);
+  });
+});
+
+describe('theme-driven building effects', () => {
+  it('selects window illumination deterministically by building, face and position', () => {
+    const choices = Array.from({ length: 100 }, (_, index) =>
+      seededWindowLit(17, 'south', index, themes['cozy-night'].emissive.windowFraction),
+    );
+    expect(choices).toEqual(Array.from({ length: 100 }, (_, index) =>
+      seededWindowLit(17, 'south', index, themes['cozy-night'].emissive.windowFraction),
+    ));
+    expect(choices.filter(Boolean).length).toBeGreaterThan(40);
+    expect(choices.filter(Boolean).length).toBeLessThan(80);
+    expect(seededWindowLit(17, 'south', 0, 0)).toBe(false);
+    expect(seededWindowLit(17, 'east', 0, 1)).toBe(true);
+  });
+
+  it('derives night emissive and winter surface parameters for existing painters', () => {
+    const night = buildingPalette(themes['cozy-night']);
+    const winter = buildingPalette(themes['snowy-cabin']);
+    expect(night.windowFraction).toBe(0.6);
+    expect(night.lampPoolStrength).toBeGreaterThan(0);
+    expect(winter.snowCover).toBe(0.9);
+    expect(winter.snowColor).toMatch(/^#[0-9a-f]{6}$/i);
   });
 });
 

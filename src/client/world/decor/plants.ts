@@ -109,12 +109,27 @@ function trunk(ctx: CanvasRenderingContext2D, f: Foot, h: number, w: number, col
   fillPixelRect(ctx, f.sx - w / 2, f.sy - band, w, band, mix(colour, ink, 0.4));
 }
 
+function snowLine(ctx: CanvasRenderingContext2D, from: Foot, to: Foot, pal: BuildingPalette): void {
+  if (pal.snowCover <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(0.94, pal.snowCover * 0.9);
+  strokePixelLine(ctx, from, to, pal.snowColor, 3);
+  ctx.restore();
+}
+
+function accentPoint(ctx: CanvasRenderingContext2D, x: number, y: number, v: number, pal: BuildingPalette): void {
+  if (v < pal.accentStrength) fillPixelRect(ctx, x, y, 2, 2, pal.accentColor);
+}
+
 function round(ctx: CanvasRenderingContext2D, f: Foot, kind: PlantKind, v: number, s: number, pal: BuildingPalette): void {
   const p = leafPalette(pal, kind, v);
   const r = (kind === 'willow' ? 8.5 : 6.6 + v * 2) * s;
   groundShadow(ctx, f, r * 0.95, pal);
   trunk(ctx, f, 6 * s, 2.2 * s, kind === 'birch' ? pal.white : pal.trunk, pal.leafDark);
   ball(ctx, f.sx, f.sy - 6 * s - r * 0.75, r, p);
+  const canopyY = f.sy - 6 * s - r * 0.75;
+  snowLine(ctx, { sx: f.sx - r * 0.42, sy: canopyY - r * 0.68 }, { sx: f.sx + r * 0.38, sy: canopyY - r * 0.68 }, pal);
+  accentPoint(ctx, f.sx - r * 0.2, canopyY - r * 0.3, v, pal);
   if (kind === 'willow') {
     // Long hanging strands down the lit side.
     for (let i = -2; i <= 2; i++) {
@@ -149,7 +164,13 @@ function spruce(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pa
       { sx: f.sx + half, sy: baseY },
       { sx: f.sx, sy: baseY + 1.6 * s },
     ], shade);
+    snowLine(ctx,
+      { sx: f.sx - half * 0.52, sy: apexY + (baseY - apexY) * 0.45 },
+      { sx: f.sx + half * 0.52, sy: apexY + (baseY - apexY) * 0.45 },
+      pal,
+    );
   }
+  accentPoint(ctx, f.sx - 1, f.sy - h * 0.66, v, pal);
 }
 
 function poplar(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal: BuildingPalette): void {
@@ -165,6 +186,7 @@ function poplar(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pa
   ctx.clip();
   disc(ctx, f.sx - rx * 0.28, cy - ry * 0.05, rx * 0.8, ry * 0.97, p.lit);
   ctx.restore();
+  snowLine(ctx, { sx: f.sx - rx * 0.55, sy: cy - ry * 0.74 }, { sx: f.sx + rx * 0.5, sy: cy - ry * 0.74 }, pal);
 }
 
 function umbrella(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal: BuildingPalette): void {
@@ -174,6 +196,7 @@ function umbrella(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, 
   disc(ctx, f.sx, f.sy - 15 * s, 8 * s, 3.6 * s, p.shade);
   disc(ctx, f.sx - 0.8 * s, f.sy - 16 * s, 7.4 * s, 3.1 * s, p.lit);
   disc(ctx, f.sx + (v - 0.5) * 6 * s, f.sy - 19 * s, 4.4 * s, 2.2 * s, p.lit);
+  snowLine(ctx, { sx: f.sx - 5 * s, sy: f.sy - 18 * s }, { sx: f.sx + 5 * s, sy: f.sy - 18 * s }, pal);
 }
 
 function bush(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal: BuildingPalette): void {
@@ -190,6 +213,7 @@ function hedge(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal
     disc(ctx, f.sx + dx * s, f.sy + dy * s, 4.2 * s, 2.8 * s, p.shade);
     disc(ctx, f.sx + (dx - 0.8) * s, f.sy + (dy - 1) * s, 3.6 * s, 2.3 * s, p.lit);
   }
+  snowLine(ctx, { sx: f.sx - 6 * s, sy: f.sy - 6 * s }, { sx: f.sx + 6 * s, sy: f.sy - 6 * s }, pal);
 }
 
 function rock(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal: BuildingPalette): void {
