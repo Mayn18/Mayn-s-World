@@ -14,6 +14,25 @@ import { forestAt, planDecor, tileKey } from './plan';
 
 const plan = planDecor(townModel, townRoadLayer, townBuildings, townWalls, townDecor);
 
+describe('M6 vegetation placement snapshot', () => {
+  it('records the exact pre-M6 planned tree placement checksum', () => {
+    const entries = [...plan.plants.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .flatMap(([key, plants]) => plants.map((p) => ({ key, kind: p.kind, ox: p.ox, oy: p.oy, v: p.v, s: p.s })));
+    const count = entries.length;
+    let hash = 0x811c9dc5;
+    for (const entry of entries) {
+      for (const byte of new TextEncoder().encode(JSON.stringify(entry))) {
+        hash ^= byte;
+        hash = Math.imul(hash, 0x01000193);
+      }
+    }
+    hash >>>= 0;
+    expect(count).toBe(1651);
+    expect(hash).toBe(1887323896);
+  });
+});
+
 describe('readDecor', () => {
   it('reads every prop, yard and fence in the map file', () => {
     expect(townDecor.props).toHaveLength(128);

@@ -19,6 +19,7 @@ import { fillPolygon, strokeLine } from './shapes';
 import type { TerrainPalette } from './terrainPalette';
 import { mix } from './terrainPalette';
 import { paintPixelCourses } from './pixelArt';
+import { hash2 } from '../buildings/random';
 
 // Widths are in picture pixels. A tile is 32 wide, so these are thin on purpose.
 const KERB_PX = 1.4;
@@ -99,6 +100,32 @@ export function paintGround(
       line: mix(surface, palette.roads.kerb, 0.25),
       joint: mix(surface, palette.roads.kerb, 0.16),
     });
+  }
+  if (kind === 'plaza') {
+    const cx = (tile[0]!.sx + tile[2]!.sx) / 2;
+    const cy = (tile[0]!.sy + tile[2]!.sy) / 2;
+    for (const radius of [8, 13]) {
+      let previous: ScreenPoint | null = null;
+      for (let i = 0; i <= 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        const point = { sx: cx + Math.cos(angle) * radius, sy: cy + Math.sin(angle) * radius * 0.5 };
+        if (previous) strokeLine(ctx, previous, point, mix(surface, palette.roads.kerb, 0.22), 0.8);
+        previous = point;
+      }
+    }
+  }
+  if (kind === 'main') {
+    const seed = hash2(x, y, 403);
+    const [a, b, c, d] = tile;
+    const from = { sx: a.sx + (c.sx - a.sx) * (0.42 + seed * 0.08), sy: a.sy + (c.sy - a.sy) * 0.5 };
+    const to = { sx: b.sx + (d.sx - b.sx) * (0.42 + seed * 0.08), sy: b.sy + (d.sy - b.sy) * 0.5 };
+    strokeLine(ctx, from, to, mix(surface, palette.roads.kerb, 0.18), 0.7);
+  }
+  if (kind === 'lane' || kind === 'track') {
+    const offset = hash2(x, y, 404) < 0.5 ? -0.18 : 0.18;
+    const from = mapToScreen(x + 0.32 + offset * 0.2, y + 0.5, level);
+    const to = mapToScreen(x + 0.68 + offset * 0.2, y + 0.5, level);
+    strokeLine(ctx, from, to, mix(surface, palette.roads.kerb, 0.28), 0.8);
   }
 
   // A kerb along every side of paved ground that borders anything else.

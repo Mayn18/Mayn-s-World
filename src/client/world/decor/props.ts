@@ -76,6 +76,7 @@ function lamp(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): v
   fillPixelRect(ctx, base.sx - 2, base.sy - 18, 4, 6, pal.m.gold.dark);
   ctx.fillStyle = pal.flowers[1]!;
   fillPixelRect(ctx, base.sx - 2, base.sy - 16, 4, 4, pal.flowers[1]!);
+  fillPixelRect(ctx, base.sx - 3, base.sy - 18, 6, 1, pal.m.iron.shade);
 }
 
 function bench(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, alongX: boolean): void {
@@ -196,6 +197,7 @@ function sign(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): v
   const c = at(o, 0.5, 0.5, 0);
   fillPixelRect(ctx, c.sx - 1, c.sy - 10, 2, 10, pal.woodDark);
   fillPolygon(ctx, [{ sx: c.sx - 4, sy: c.sy - 13 }, { sx: c.sx + 4, sy: c.sy - 11 }, { sx: c.sx + 4, sy: c.sy - 6 }, { sx: c.sx - 4, sy: c.sy - 8 }], pal.m.doorWood.lit);
+  fillPixelRect(ctx, c.sx - 1, c.sy - 10, 2, 2, pal.m.gold.lit);
 }
 
 // ---- everyday life: casks, carts, woodpiles, troughs, cattle, training and washing ----

@@ -31,9 +31,10 @@ import { type Side, faceCorners, faceLine } from './faceGeometry';
 import { LEVEL_PX, type ScreenPoint, tileCorners } from './projection';
 import { paintClimb, paintGround } from './roadPainter';
 import { fillPolygon, strokeLine } from './shapes';
-import type { TerrainPalette } from './terrainPalette';
+import { mix, type TerrainPalette } from './terrainPalette';
 import { paintPixelCourses } from './pixelArt';
 import { paintWaterTile } from './waterPainter';
+import { hash2 } from '../buildings/random';
 
 // How tall the pale cap on top of a retaining wall is, in picture pixels.
 const WALL_CAP_PX = 2;
@@ -68,6 +69,28 @@ function paintFace(
       const [from, to] = faceLine(x, y, side, level);
       strokeLine(ctx, from, to, colours.line);
     }
+    if (face.kind === 'cliff') {
+      const fractures = hash2(x, y, 402);
+      if (fractures < 0.72) {
+        const [from, to] = faceLine(x, y, side, face.bottom + (face.top - face.bottom) * 0.42);
+        strokeLine(ctx, from, to, mix(colours.shade, palette.faces.slope.line, 0.35), 1);
+      }
+      if (fractures > 0.46) {
+        const [ledgeFrom, ledgeTo] = faceLine(x, y, side, face.top - 0.35);
+        strokeLine(ctx, ledgeFrom, ledgeTo, palette.faces.slope.lit, 1.2);
+      }
+    }
+  } else if (face.kind === 'cascade') {
+    const [topLeft, topRight, bottomRight, bottomLeft] = faceCorners(x, y, side, face);
+    const streakColour = mix(colours.lit, palette.faces.cascade.lit, 0.45);
+    for (let i = 1; i <= 3; i++) {
+      const t = i / 4;
+      const from = { sx: topLeft.sx + (topRight.sx - topLeft.sx) * t, sy: topLeft.sy + (topRight.sy - topLeft.sy) * t };
+      const to = { sx: bottomLeft.sx + (bottomRight.sx - bottomLeft.sx) * t, sy: bottomLeft.sy + (bottomRight.sy - bottomLeft.sy) * t };
+      strokeLine(ctx, from, to, streakColour, 1);
+    }
+    const foam = faceLine(x, y, side, face.bottom);
+    strokeLine(ctx, foam[0], foam[1], palette.waterShore, 1.4);
   }
 
   // A pale cap along the top edge of a built wall.
@@ -110,7 +133,19 @@ export function paintTerrain(
         paintWaterTile(ctx, model, x, y, palette);
       } else {
         const level = model.terrain.levels[y]![x]!;
-        fillPolygon(ctx, tileCorners(x, y, model.surface[y]![x]!), palette.top[level]!);
+        const base = palette.top[level]!;
+        const tile = tileCorners(x, y, model.surface[y]![x]!);
+        fillPolygon(ctx, tile, base);
+        const variant = hash2(x, y, 401);
+        if (variant > 0.82) {
+          const detail = mix(base, palette.faces.slope.line, 0.12);
+          const inset = [
+            { sx: tile[0]!.sx + 3, sy: tile[0]!.sy + 1.5 },
+            { sx: tile[1]!.sx - 3, sy: tile[1]!.sy + 1.5 },
+            { sx: tile[2]!.sx - 3, sy: tile[2]!.sy - 1.5 },
+          ];
+          fillPolygon(ctx, inset, detail);
+        }
       }
     }
     if (roads) paintGround(ctx, model, roads, x, y, palette);

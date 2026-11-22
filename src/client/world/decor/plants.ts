@@ -40,7 +40,7 @@ function leafPalette(pal: BuildingPalette, kind: PlantKind, v: number): Palette 
   const yellow = pal.flowers[1]!;
   let base: string;
   if (kind === 'blossom') base = pal.flowers[0]!;
-  else if (kind === 'autumn') base = pal.m.roofOrange.lit;
+  else if (kind === 'autumn') base = mix(pal.leaf, pal.leafDark, 0.18);
   else if (kind === 'willow') base = mix(pal.leafLight, yellow, 0.18);
   else if (kind === 'birch') base = mix(pal.leafLight, yellow, 0.12);
   else if (v < 0.4) base = pal.leaf;

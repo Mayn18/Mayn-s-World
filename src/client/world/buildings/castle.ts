@@ -21,6 +21,7 @@ import type { BuildingPalette, Tone } from './palette';
 import { box, doorPlacement } from './painter';
 import { cone, cylinder, onCylinder } from './solids';
 import type { MaterialName } from '../themes';
+import { hash2 } from './random';
 
 export const CASTLE_KINDS: readonly string[] = ['tower', 'keep', 'gate'];
 
@@ -50,13 +51,15 @@ function courses(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: numbe
   const rows = Math.max(2, Math.floor((z1 - z0) / COURSE_PX));
   const south = [at(o, x0, y1, z0), at(o, x1, y1, z0), at(o, x1, y1, z1), at(o, x0, y1, z1)];
   const east = [at(o, x1, y1, z0), at(o, x1, y0, z0), at(o, x1, y0, z1), at(o, x1, y1, z1)];
+  const southJoint = hash2(Math.round(x0 * 10), Math.round(z0), 319) < 0.34 ? tone.dark : tone.shade;
+  const eastJoint = hash2(Math.round(y0 * 10), Math.round(z1), 320) < 0.34 ? tone.dark : tone.shade;
   paintPixelCourses(ctx, south, rows, Math.max(2, Math.round((x1 - x0) / 0.55)), {
-    line: tone.dark,
-    joint: tone.shade,
+    line: mix(tone.dark, tone.shade, southJoint === tone.dark ? 0.18 : 0.5),
+    joint: southJoint,
   });
   paintPixelCourses(ctx, east, rows, Math.max(2, Math.round((y1 - y0) / 0.55)), {
-    line: tone.dark,
-    joint: tone.shade,
+    line: mix(tone.dark, tone.shade, eastJoint === tone.dark ? 0.18 : 0.5),
+    joint: eastJoint,
   });
 }
 
@@ -238,7 +241,7 @@ function crown(ctx: CanvasRenderingContext2D, o: Origin, cx: number, cy: number,
 
 // ---- heights ----------------------------------------------------------------------
 
-type TowerStyle = 'cone' | 'crown' | 'square';
+export type TowerStyle = 'cone' | 'crown' | 'square' | 'hoard';
 
 interface TowerSpec {
   style: TowerStyle;
@@ -248,16 +251,21 @@ interface TowerSpec {
   slits: number[];
 }
 
-function towerSpec(b: Building): TowerSpec {
+export function towerSpec(b: Building): TowerSpec {
   if (b.name === 'North Tower') return { style: 'crown', body: 84, roof: 'roofSlate', radius: 0.88, slits: [20, 40, 62] };
+  if (b.name === 'Northwest Wall Tower') return { style: 'square', body: 58, roof: 'roofSlate', radius: 0.72, slits: [16, 34, 50] };
+  if (b.name === 'Southwest Wall Tower') return { style: 'hoard', body: 54, roof: 'roofBrown', radius: 0.76, slits: [18, 38] };
   if (b.name === 'Barbican Tower W') return { style: 'crown', body: 42, roof: 'roofSlate', radius: 0.72, slits: [14, 30] };
   if (b.name === 'Barbican Tower E') return { style: 'crown', body: 48, roof: 'roofSlate', radius: 0.78, slits: [14, 32] };
   if (b.name === 'Keep Gate Tower W') return { style: 'cone', body: 42, roof: 'roofSlate', radius: 0.68, slits: [14, 28] };
   if (b.name === 'Keep Gate Tower E') return { style: 'crown', body: 40, roof: 'roofRed', radius: 0.76, slits: [14, 28] };
-  if (b.name === 'NW Tower') return { style: 'cone', body: 72, roof: 'roofSlate', radius: 1.3, slits: [24, 48] };
-  if (b.name === 'NE Tower') return { style: 'cone', body: 62, roof: 'roofRed', radius: 1.22, slits: [22, 42] };
+  if (b.name === 'NW Tower') return { style: 'square', body: 72, roof: 'roofSlate', radius: 1.3, slits: [24, 48] };
+  if (b.name === 'NE Tower') return { style: 'hoard', body: 62, roof: 'roofRed', radius: 1.22, slits: [22, 42] };
   if (b.name === 'SW Tower') return { style: 'cone', body: 78, roof: 'roofBrown', radius: 1.38, slits: [24, 48, 64] };
   if (b.name === 'SE Tower') return { style: 'cone', body: 66, roof: 'roofRed', radius: 1.24, slits: [22, 42] };
+  if (b.id % 4 === 0) return { style: 'hoard', body: 58, roof: 'roofBrown', radius: Math.min(b.w, b.d) / 2 - 0.12, slits: [20, 38, 52] };
+  if (b.id % 4 === 1) return { style: 'square', body: 62, roof: 'roofSlate', radius: Math.min(b.w, b.d) / 2 - 0.12, slits: [22, 42, 58] };
+  if (b.id % 4 === 2) return { style: 'crown', body: 64, roof: 'roofSlate', radius: Math.min(b.w, b.d) / 2 - 0.12, slits: [24, 44, 60] };
   return { style: 'cone', body: 66, roof: 'roofSlate', radius: Math.min(b.w, b.d) / 2 - 0.12, slits: [24, 30, 44] };
 }
 
@@ -293,9 +301,18 @@ function paintTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: 
   if (spec.style === 'crown') {
     crown(ctx, o, cx, cy, r, spec.body + 4, pal);
     banner(ctx, at(o, cx, cy, spec.body + 4), 16, pal);
-  } else {
+  } else if (spec.style === 'cone') {
     cone(ctx, o, cx, cy, r + 0.2, spec.body + 4, 34, pal.m[spec.roof]);
     banner(ctx, at(o, cx, cy, spec.body + 36), 9, pal);
+  } else if (spec.style === 'square') {
+    box(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body, spec.body + 5, stone, stone.light);
+    battlements(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body + 5, stone, 0.42);
+    pyramid(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body + 9, 18, pal.m[spec.roof]);
+  } else {
+    box(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body, spec.body + 8, pal.m.doorWood);
+    cylinder(ctx, o, cx, cy, r, spec.body + 8, spec.body + 12, stone);
+    crown(ctx, o, cx, cy, r, spec.body + 12, pal);
+    banner(ctx, at(o, cx, cy, spec.body + 12), 12, pal);
   }
 }
 
@@ -367,11 +384,11 @@ function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
   const corners: [number, number][] = [[0.5, 0.5], [w - 0.5, 0.5], [0.5, d - fb - 0.1], [w - 0.5, d - fb - 0.1]];
   corners
     .sort((p, q) => p[0] + p[1] - (q[0] + q[1]))
-    .forEach(([cx, cy]) => {
+    .forEach(([cx, cy], index) => {
       cylinder(ctx, o, cx, cy, 0.62, 0, BODY + 18, stone);
       cylinderCourses(ctx, o, cx, cy, 0.62, 0, BODY + 18, stone);
       cylinder(ctx, o, cx, cy, 0.7, BODY + 18, BODY + 22, stone);
-      cone(ctx, o, cx, cy, 0.78, BODY + 22, 20, pal.m.roofRed);
+      cone(ctx, o, cx, cy, 0.78, BODY + 22, 20, index < 2 ? pal.m.roofRed : pal.m.roofSlate);
     });
   banner(ctx, at(o, w / 2, (d - fb) / 2, BODY + 58), 16, pal);
 }

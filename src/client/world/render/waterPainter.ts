@@ -35,6 +35,27 @@ export function paintWaterTile(
   const step = Math.min(WATER_STEPS, Math.max(1, model.shore[y]![x]!)) - 1;
   fillPolygon(ctx, tileCorners(x, y, level), palette.water[step]!);
 
+  if (step > 0) {
+    ctx.save();
+    ctx.beginPath();
+    tileCorners(x, y, level).forEach(({ sx, sy }, index) => (
+      index === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy)
+    ));
+    ctx.closePath();
+    ctx.clip();
+    ctx.globalAlpha = 0.28;
+    const centre = mapToScreen(x + 0.5, y + 0.5, level);
+    for (let i = -2; i <= 2; i++) {
+      for (let j = -2; j <= 2; j++) {
+        if ((i + j) % 2 !== 0) continue;
+        const px = centre.sx + i * 3 + j * 1.5;
+        const py = centre.sy + j * 1.5;
+        strokePixelLine(ctx, { sx: px, sy: py }, { sx: px + 1, sy: py }, palette.water[Math.max(0, step - 1)]!);
+      }
+    }
+    ctx.restore();
+  }
+
   if ((x + 2 * y) % 8 === 0) {
     ctx.save();
     ctx.beginPath();

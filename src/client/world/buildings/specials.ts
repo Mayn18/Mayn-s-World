@@ -262,7 +262,7 @@ function paintFacadeTower(
 }
 
 function paintCathedral(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: BuildingPalette): void {
-  const stone = pal.m.wallStone;
+  const stone = pal.m.wallCream;
   const slate = pal.m.roofSlate;
   const wood = pal.m.doorWood;
   const { w, d } = b;
@@ -333,6 +333,11 @@ function paintCathedral(ctx: CanvasRenderingContext2D, o: Origin, b: Building, p
   box(ctx, o, doorCentre - 0.92, d + 0.16, doorCentre + 0.92, d + 0.38, 0, 3, stone, stone.light);
   box(ctx, o, doorCentre - 0.76, d + 0.38, doorCentre + 0.76, d + 0.6, 0, 2, stone, stone.light);
   box(ctx, o, doorCentre - 0.6, d + 0.6, doorCentre + 0.6, d + 0.82, 0, 1, stone, stone.light);
+  for (const offset of [-1.35, 1.35]) {
+    const lamp = at(o, doorCentre + offset, d + 1.1, 0);
+    fillPixelRect(ctx, lamp.sx - 1, lamp.sy - 10, 2, 10, pal.m.iron.lit);
+    fillPixelRect(ctx, lamp.sx - 2, lamp.sy - 12, 4, 3, pal.m.gold.lit);
+  }
 }
 
 function ellipseAt(ctx: CanvasRenderingContext2D, o: Origin, cx: number, cy: number, z: number, r: number, colour: string): void {

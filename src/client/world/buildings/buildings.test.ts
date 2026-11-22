@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { townBuildings, townDecor, townWalls } from '../data/loader';
 import { townModel } from '../terrain/town';
-import { castleHeight } from './castle';
+import { castleHeight, towerSpec } from './castle';
 import { SPECIAL_KINDS, specialHeight } from './specials';
 import { doorPlacement, roofHeightAt, windowCentres } from './painter';
 import { REVIEW_IDS, buildScene, wallTiles } from './scene';
@@ -145,6 +145,8 @@ describe('castle silhouette', () => {
 
     expect(castleHeight(keep)).toBeGreaterThan(Math.max(...towerHeights));
     expect(new Set(towerHeights).size).toBeGreaterThan(1);
+    const towerStyles = new Set(townBuildings.filter((b) => b.kind === 'tower').map(towerSpec).map((spec) => spec.style));
+    expect(towerStyles.size).toBeGreaterThanOrEqual(4);
   });
 });
 
