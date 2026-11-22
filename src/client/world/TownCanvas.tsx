@@ -43,9 +43,17 @@ import {
   getThemeRebuildCounter,
   setActiveTheme,
 } from './activeTheme';
+import { AmbientScheduler } from './ambient/animationScheduler';
+import type { MotionSetting } from './ambient/useAmbientMotion';
+import { buildAmbientScene } from './ambient/ambientScene';
+import { paintAmbientBase } from './ambient/ambientPainter';
+import { buildWaterEffectScene } from './ambient/waterEffects';
+import { buildingPalette } from './buildings/palette';
 
 interface TownCanvasProps {
   theme?: Theme;
+  motion?: MotionSetting;
+  reducedMotion?: boolean;
 }
 
 interface TerrainCanvasCache {
@@ -235,9 +243,14 @@ const devPreviewThemes: Record<'dusk' | 'night' | 'overcast', Theme> = import.me
 // The canvas shows the world and handles camera gestures; when destinations
 // become interactive, they get real links positioned over the canvas. The tile
 // readout is a developer aid.
-export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
+export function TownCanvas({
+  theme = defaultTheme,
+  motion = 'on',
+  reducedMotion = false,
+}: TownCanvasProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   // The latest fit, kept in a ref (not state) so pointer handlers can read it
   // without re-rendering React every time the window is resized.
   const viewRef = useRef<ViewTransform>({ scale: 0, offsetX: 0, offsetY: 0 });
@@ -249,8 +262,10 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
   const redrawFrameRef = useRef<number | null>(null);
   const terrainCanvasRef = useRef<TerrainCanvasCache | null>(null);
   const terrainCacheBuildRef = useRef<TerrainCacheBuild | null>(null);
+  const actorBuffersRef = useRef<HTMLCanvasElement[]>([]);
   const blockedCacheScaleRef = useRef(0);
   const drawRef = useRef<() => void>(() => {});
+  const ambientDrawRef = useRef<() => void>(() => {});
   const devMetricsRef = useRef({
     coldBuildMs: [] as number[],
     upgradeWallMs: [] as number[],
@@ -270,10 +285,125 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     const decor = buildDecorLayer(townModel, townRoadLayer, townBuildings, townWalls, townDecor);
     return buildScene(townModel, townBuildings, townWalls, undefined, decor);
   }, []);
+  const ambientScene = useMemo(
+    () => buildAmbientScene(townModel, townRoadLayer, scene, townDecor),
+    [scene],
+  );
+  const cachePaintOptions = useMemo(
+    () => ({
+      animatedStatic: false,
+      movingFigureTiles: ambientScene.movingFigureTiles,
+      movingAnimalPropIds: ambientScene.movingAnimalPropIds,
+    }),
+    [ambientScene],
+  );
+  const waterEffects = useMemo(() => buildWaterEffectScene(townModel, townRoadLayer), []);
+  const ambientPalette = useMemo(() => buildingPalette(theme), [theme]);
+  const ambientTerrain = useMemo(() => terrainPalette(theme), [theme]);
   const bounds = useMemo(() => worldBounds(townModel, scene.top), [scene]);
   const cameraRef = useRef<CameraState>(initialCamera(bounds.width, bounds.height));
   const fitRef = useRef<ViewTransform>({ scale: 0, offsetX: 0, offsetY: 0 });
   const viewportRef = useRef({ width: 0, height: 0 });
+
+  const drawAmbientFrame = useCallback(
+    (time: number, animated: boolean) => {
+      const box = boxRef.current;
+      const canvas = overlayCanvasRef.current;
+      if (!box || !canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.max(1, Math.round(box.clientWidth * dpr));
+      const height = Math.max(1, Math.round(box.clientHeight * dpr));
+      const hardwareConcurrency = navigator.hardwareConcurrency || 8;
+      const deviceFactor = (hardwareConcurrency <= 4 ? 0.65 : 1) * (dpr >= 3 ? 0.75 : 1);
+      if (canvas.width !== width) canvas.width = width;
+      if (canvas.height !== height) canvas.height = height;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const view = viewRef.current;
+      if (view.scale <= 0) return;
+      const scale = view.scale * dpr;
+      ctx.setTransform(scale, 0, 0, scale, view.offsetX * dpr, view.offsetY * dpr);
+      ctx.translate(-bounds.left, -bounds.top);
+      ctx.imageSmoothingEnabled = false;
+      while (actorBuffersRef.current.length < ambientScene.walkers.length + ambientScene.animals.length) {
+        const buffer = document.createElement('canvas');
+        buffer.width = 64;
+        buffer.height = 64;
+        actorBuffersRef.current.push(buffer);
+      }
+      paintAmbientBase(
+        ctx,
+        ambientScene,
+        waterEffects,
+        scene,
+        townModel,
+        theme,
+        ambientPalette,
+        ambientTerrain,
+        actorBuffersRef.current,
+        cachePaintOptions,
+        time,
+        animated,
+        view.scale,
+        box.clientWidth,
+        box.clientHeight,
+        dpr,
+        deviceFactor,
+      );
+    },
+    [ambientPalette, ambientScene, ambientTerrain, bounds.left, bounds.top, cachePaintOptions, scene, theme, waterEffects],
+  );
+
+  useEffect(() => {
+    const box = boxRef.current;
+    const canvas = overlayCanvasRef.current;
+    if (!box || !canvas) return;
+    const scheduler = new AmbientScheduler(drawAmbientFrame);
+    ambientDrawRef.current = () => scheduler.renderCurrent();
+
+    const policy = () => ({
+      enabled: motion === 'on',
+      reducedMotion,
+      pageVisible: !document.hidden,
+    });
+    const syncSize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.max(1, Math.round(box.clientWidth * dpr));
+      const height = Math.max(1, Math.round(box.clientHeight * dpr));
+      if (canvas.width !== width) canvas.width = width;
+      if (canvas.height !== height) canvas.height = height;
+      scheduler.renderCurrent();
+    };
+    const handleVisibility = () => scheduler.setPolicy(policy());
+    const observer = new ResizeObserver(syncSize);
+    observer.observe(box);
+    window.addEventListener('resize', syncSize);
+    document.addEventListener('visibilitychange', handleVisibility);
+    syncSize();
+    scheduler.setPolicy(policy());
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncSize);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      scheduler.dispose();
+      ambientDrawRef.current = () => {};
+      canvas.width = 0;
+      canvas.height = 0;
+    };
+  }, [drawAmbientFrame, motion, reducedMotion]);
+
+  useEffect(() => () => {
+    for (const buffer of actorBuffersRef.current) {
+      buffer.width = 0;
+      buffer.height = 0;
+    }
+    actorBuffersRef.current = [];
+  }, []);
 
   const scheduleDraw = useCallback(() => {
     if (redrawFrameRef.current !== null) return;
@@ -317,7 +447,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
 
       const palette = terrainPalette(theme);
       const decorate = (ctx: CanvasRenderingContext2D, x: number, y: number) =>
-        scene.paintTile(ctx, x, y, theme);
+        scene.paintTile(ctx, x, y, theme, cachePaintOptions);
       const build: TerrainCacheBuild = {
         canvas: cacheCanvas,
         context,
@@ -401,7 +531,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
 
       build.frameId = window.requestAnimationFrame(paintNextBatch);
     },
-    [bounds, scene, scheduleDraw, theme],
+    [bounds, cachePaintOptions, scene, scheduleDraw, theme],
   );
 
   const draw = useCallback(() => {
@@ -461,7 +591,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
       cacheContext.setTransform(1, 0, 0, 1, 0, 0);
       try {
         paintTerrain(cacheContext, townModel, terrainPalette(theme), bounds, townRoadLayer, (c, x, y) =>
-          scene.paintTile(c, x, y, theme),
+          scene.paintTile(c, x, y, theme, cachePaintOptions),
         );
       } catch (error) {
         releaseCacheCanvas({ canvas: cacheCanvas, theme, scale: 1 });
@@ -523,7 +653,8 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
       bounds.height,
     );
     if (terrainCanvas.scale < maxResolution.scale) startCacheUpgrade(maxResolution);
-  }, [bounds, scene, startCacheUpgrade, theme]);
+    ambientDrawRef.current();
+  }, [bounds, cachePaintOptions, scene, startCacheUpgrade, theme]);
   drawRef.current = draw;
 
   // Draw once the canvas exists, and redraw whenever its box changes size. The
@@ -808,6 +939,11 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
         onDragStart={(event) => event.preventDefault()}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => setHovered(null)}
+      />
+      <canvas
+        ref={overlayCanvasRef}
+        className="world-animation-overlay"
+        aria-hidden="true"
       />
       {/* Not aria-live: a readout that changes on every mouse move would flood a
           screen reader. This is a developer aid, not content. */}

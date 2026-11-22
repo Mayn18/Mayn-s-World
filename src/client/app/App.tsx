@@ -5,6 +5,8 @@ import {
   subscribeActiveTheme,
 } from '../world/activeTheme';
 import { ThemeSelector } from '../components/ThemeSelector';
+import { MotionToggle } from '../components/MotionToggle';
+import { useAmbientMotion } from '../world/ambient/useAmbientMotion';
 
 // The whole page is the world: one full-window canvas, nothing around it.
 //
@@ -16,6 +18,7 @@ import { ThemeSelector } from '../components/ThemeSelector';
 // <h1> is visually hidden: the page still needs a title for screen readers and
 // search engines, but the picture is the experience.
 export function App() {
+  const ambientMotion = useAmbientMotion();
   const theme = useSyncExternalStore(
     subscribeActiveTheme,
     getActiveTheme,
@@ -24,8 +27,13 @@ export function App() {
   return (
     <main className="world-viewport">
       <h1 className="sr-only">Mayn&apos;s World</h1>
-      <TownCanvas theme={theme} />
+      <TownCanvas
+        theme={theme}
+        motion={ambientMotion.motion}
+        reducedMotion={ambientMotion.lockedByDevice}
+      />
       <ThemeSelector currentThemeId={theme.id} />
+      <MotionToggle {...ambientMotion} />
     </main>
   );
 }

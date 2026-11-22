@@ -17,13 +17,12 @@ const STORAGE_KEY = 'mayns-world:ambient-motion';
 export type MotionSetting = 'on' | 'off';
 
 function deviceRequestsReducedMotion(): boolean {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 }
 
 // localStorage can throw (private browsing, blocked site data) or come back
 // empty, so every access is wrapped and the page works without it.
 function loadSetting(): MotionSetting {
-  if (deviceRequestsReducedMotion()) return 'off';
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (saved === 'on' || saved === 'off') return saved;
@@ -42,13 +41,21 @@ function saveSetting(setting: MotionSetting): void {
 }
 
 export function useAmbientMotion() {
-  // Passing the function (not its result) means it runs once, on first render.
-  const [motion, setMotion] = useState<MotionSetting>(loadSetting);
-  const [lockedByDevice] = useState<boolean>(deviceRequestsReducedMotion);
+  const [setting, setSetting] = useState<MotionSetting>(loadSetting);
+  const [lockedByDevice, setLockedByDevice] = useState<boolean>(deviceRequestsReducedMotion);
+  const motion: MotionSetting = lockedByDevice ? 'off' : setting;
 
   useEffect(() => {
     document.documentElement.dataset.motion = motion;
   }, [motion]);
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!media) return;
+    const update = () => setLockedByDevice(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
 
   // Pause animations while the tab is in the background; nobody is watching.
   useEffect(() => {
@@ -62,10 +69,10 @@ export function useAmbientMotion() {
 
   const toggle = useCallback(() => {
     if (lockedByDevice) return;
-    const next: MotionSetting = motion === 'on' ? 'off' : 'on';
-    setMotion(next);
+    const next: MotionSetting = setting === 'on' ? 'off' : 'on';
+    setSetting(next);
     saveSetting(next);
-  }, [lockedByDevice, motion]);
+  }, [lockedByDevice, setting]);
 
   return { motion, toggle, lockedByDevice };
 }

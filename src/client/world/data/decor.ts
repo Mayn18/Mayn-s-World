@@ -8,6 +8,10 @@ export interface Prop {
   y: number;
 }
 
+export function propKey(prop: Pick<Prop, 't' | 'x' | 'y'>): string {
+  return `${prop.t}:${prop.x}:${prop.y}`;
+}
+
 // A garden bed beside a building. `side` is which side of building `of` it lies on.
 export interface Yard {
   x: number;

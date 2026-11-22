@@ -103,10 +103,40 @@ function torch(ctx: CanvasRenderingContext2D, p: ScreenPoint, pal: BuildingPalet
   ], pal.flowers[1]!);
 }
 
-function banner(ctx: CanvasRenderingContext2D, tip: ScreenPoint, height: number, pal: BuildingPalette, colour: MaterialName = 'awnRed'): void {
+function banner(
+  ctx: CanvasRenderingContext2D,
+  tip: ScreenPoint,
+  height: number,
+  pal: BuildingPalette,
+  colour: MaterialName = 'awnRed',
+  includeCloth = true,
+): void {
   strokeLine(ctx, tip, { sx: tip.sx, sy: tip.sy - height }, pal.m.iron.lit, 1);
+  if (!includeCloth) return;
   const top = tip.sy - height;
   fillPolygon(ctx, [{ sx: tip.sx, sy: top }, { sx: tip.sx + 8, sy: top + 2.5 }, { sx: tip.sx, sy: top + 5.5 }], pal.m[colour].lit);
+}
+
+export interface CastleBannerAnchor {
+  tip: ScreenPoint;
+  height: number;
+}
+
+export function castleBannerAnchors(o: Origin, b: Building): CastleBannerAnchor[] {
+  if (b.kind === 'tower') {
+    const spec = towerSpec(b);
+    if (spec.style === 'square') return [];
+    const height = spec.style === 'crown' ? 16 : spec.style === 'cone' ? 9 : 12;
+    const z = spec.style === 'crown' ? spec.body + 4 : spec.style === 'cone' ? spec.body + 36 : spec.body + 12;
+    return [{ tip: at(o, b.w / 2, b.d / 2, z), height }];
+  }
+  if (b.kind === 'keep') {
+    return [{ tip: at(o, b.w / 2, (b.d - 1.25) / 2, 84 + 58), height: 16 }];
+  }
+  if (b.kind === 'gate' && !TOWN_GATES.has(b.id)) {
+    return [{ tip: at(o, b.w / 2, b.d / 2, 46 + 13), height: 10 }];
+  }
+  return [];
 }
 
 function triangleCourses(ctx: CanvasRenderingContext2D, tip: ScreenPoint, left: ScreenPoint, right: ScreenPoint, tone: Tone): void {
@@ -284,7 +314,7 @@ export function castleHeight(b: Building): number {
 
 // ---- towers -----------------------------------------------------------------------
 
-function paintTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: BuildingPalette): void {
+function paintTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: BuildingPalette, includeCloth: boolean): void {
   const stone = pal.m.wallStone;
   const spec = towerSpec(b);
   const cx = b.w / 2;
@@ -305,10 +335,10 @@ function paintTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: 
   });
   if (spec.style === 'crown') {
     crown(ctx, o, cx, cy, r, spec.body + 4, pal);
-    banner(ctx, at(o, cx, cy, spec.body + 4), 16, pal);
+    banner(ctx, at(o, cx, cy, spec.body + 4), 16, pal, 'awnRed', includeCloth);
   } else if (spec.style === 'cone') {
     cone(ctx, o, cx, cy, r + 0.2, spec.body + 4, 34, pal.m[spec.roof], { color: pal.snowColor, cover: pal.snowCover });
-    banner(ctx, at(o, cx, cy, spec.body + 36), 9, pal);
+    banner(ctx, at(o, cx, cy, spec.body + 36), 9, pal, 'awnRed', includeCloth);
   } else if (spec.style === 'square') {
     box(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body, spec.body + 5, stone, stone.light);
     battlements(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body + 5, stone, 0.42);
@@ -317,13 +347,13 @@ function paintTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: 
     box(ctx, o, cx - r, cy - r, cx + r, cy + r, spec.body, spec.body + 8, pal.m.doorWood);
     cylinder(ctx, o, cx, cy, r, spec.body + 8, spec.body + 12, stone);
     crown(ctx, o, cx, cy, r, spec.body + 12, pal);
-    banner(ctx, at(o, cx, cy, spec.body + 12), 12, pal);
+    banner(ctx, at(o, cx, cy, spec.body + 12), 12, pal, 'awnRed', includeCloth);
   }
 }
 
 // ---- keep -------------------------------------------------------------------------
 
-function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: BuildingPalette): void {
+function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: BuildingPalette, includeCloth: boolean): void {
   const stone = pal.m.wallStone;
   const slate = pal.m.roofSlate;
   const { w, d } = b;
@@ -401,7 +431,7 @@ function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
       cylinder(ctx, o, cx, cy, 0.7, BODY + 18, BODY + 22, stone);
       cone(ctx, o, cx, cy, 0.78, BODY + 22, 20, index < 2 ? pal.m.roofRed : pal.m.roofSlate, { color: pal.snowColor, cover: pal.snowCover });
     });
-  banner(ctx, at(o, w / 2, (d - fb) / 2, BODY + 58), 16, pal);
+  banner(ctx, at(o, w / 2, (d - fb) / 2, BODY + 58), 16, pal, 'awnRed', includeCloth);
 }
 
 // ---- gatehouses -------------------------------------------------------------------
@@ -425,7 +455,7 @@ function paintGateTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, p
   cone(ctx, o, cx, cy, r + 0.1, 30, 16, pal.m.roofSlate, { color: pal.snowColor, cover: pal.snowCover });
 }
 
-function paintGate(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: BuildingPalette): void {
+function paintGate(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: BuildingPalette, includeCloth: boolean): void {
   if (TOWN_GATES.has(b.id)) return paintGateTower(ctx, o, b, pal);
   const stone = pal.m.wallStone;
   const { w, d } = b;
@@ -446,13 +476,20 @@ function paintGate(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
   box(ctx, o, -0.06, -0.06, w + 0.06, d + 0.06, H, H + 4, stone, stone.light);
   battlements(ctx, o, -0.06, -0.06, w + 0.06, d + 0.06, H + 4, stone, 0.45);
   hipRoof(ctx, o, 0.25, 0.25, w - 0.25, d - 0.25, H + 4, 9, pal.m.roofSlate, pal);
-  banner(ctx, at(o, w / 2, d / 2, H + 13), 10, pal);
+  banner(ctx, at(o, w / 2, d / 2, H + 13), 10, pal, 'awnRed', includeCloth);
 }
 
-export function paintCastlePiece(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: BuildingPalette): void {
-  if (b.kind === 'tower') paintTower(ctx, o, b, pal);
-  else if (b.kind === 'keep') paintKeep(ctx, o, b, pal);
-  else paintGate(ctx, o, b, pal);
+export function paintCastlePiece(
+  ctx: CanvasRenderingContext2D,
+  o: Origin,
+  b: Building,
+  pal: BuildingPalette,
+  options: { includeCloth?: boolean } = {},
+): void {
+  const includeCloth = options.includeCloth ?? true;
+  if (b.kind === 'tower') paintTower(ctx, o, b, pal, includeCloth);
+  else if (b.kind === 'keep') paintKeep(ctx, o, b, pal, includeCloth);
+  else paintGate(ctx, o, b, pal, includeCloth);
 }
 
 // ---- curtain wall -----------------------------------------------------------------

@@ -137,6 +137,17 @@ function paintFace(
   }
 }
 
+export function paintTerrainFace(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  side: Side,
+  face: TerrainFace,
+  palette: TerrainPalette,
+): void {
+  paintFace(ctx, x, y, side, face, palette);
+}
+
 // `bounds` says where the world's top-left falls in projection space (see
 // worldBounds). The painter shifts the origin so the picture starts at (0, 0).
 export function paintTerrain(

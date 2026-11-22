@@ -1,14 +1,18 @@
 import { home } from '../content/home';
-import { useAmbientMotion } from '../world/ambient/useAmbientMotion';
+import type { MotionSetting } from '../world/ambient/useAmbientMotion';
+
+interface MotionToggleProps {
+  motion: MotionSetting;
+  toggle: () => void;
+  lockedByDevice: boolean;
+}
 
 // The switch for ambient animation. aria-pressed makes it a toggle button for
 // assistive technology ("Ambient motion, toggle button, pressed"). The visible
 // text also says On or Off, so the state is never carried by colour alone.
-export function MotionToggle() {
-  const { motion, toggle, lockedByDevice } = useAmbientMotion();
-
+export function MotionToggle({ motion, toggle, lockedByDevice }: MotionToggleProps) {
   return (
-    <div className="flex flex-wrap items-center gap-4">
+    <div className="world-motion-control">
       <button
         type="button"
         className="pixel-button pixel-button-quiet"

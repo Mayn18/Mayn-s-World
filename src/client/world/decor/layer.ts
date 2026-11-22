@@ -8,7 +8,7 @@
 // Within a tile the order is: ground, then (scene) shadows and buildings, then standing
 // things, sorted back to front by their position inside the tile.
 import type { Building } from '../data/buildings';
-import { FIELD_CROPS, FIELD_STRAW, FIELD_WHEAT, type DecorData } from '../data/decor';
+import { FIELD_CROPS, FIELD_STRAW, FIELD_WHEAT, propKey, type DecorData } from '../data/decor';
 import type { BuildingPalette } from '../buildings/palette';
 import type { Origin } from '../buildings/geometry';
 import { hash2 } from '../buildings/random';
@@ -23,7 +23,13 @@ import { type FenceSeg, paintBareWellYard, paintCropRows, paintFence, paintKitch
 export interface DecorLayer {
   plan: DecorPlan;
   paintGround(ctx: CanvasRenderingContext2D, x: number, y: number, pal: BuildingPalette): void;
-  paintStanding(ctx: CanvasRenderingContext2D, x: number, y: number, pal: BuildingPalette): void;
+  paintStanding(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    pal: BuildingPalette,
+    options?: { movingFigureTiles?: ReadonlySet<number>; movingAnimalPropIds?: ReadonlySet<string> },
+  ): void;
 }
 
 // Fence edges, owned by the tile whose edge they lie on. A road crossing a fence line
@@ -94,11 +100,12 @@ export function buildDecorLayer(
         if (prop.t === 'lamp') paintLampPool(ctx, o, pal);
       }
     },
-    paintStanding(ctx, x, y, pal) {
+    paintStanding(ctx, x, y, pal, options = {}) {
       const k = tileKey(x, y);
       const o = origin(x, y);
       for (const seg of fences.get(k) ?? []) paintFence(ctx, o, seg, pal);
       for (const p of props.get(k) ?? []) {
+        if (options.movingAnimalPropIds?.has(propKey(p))) continue;
         // Benches face the square or street they stand beside: along x when the tile to the
         // south is open, otherwise along y.
         paintProp(ctx, o, p.t, pal, hash2(x, y, 80), (x + y) % 2 === 0);
@@ -109,7 +116,9 @@ export function buildDecorLayer(
         const base = mapToScreen(x + pl.ox, y + pl.oy, o.level);
         list.push({ oy: pl.oy, draw: () => paintPlant(ctx, { sx: base.sx, sy: base.sy }, pl.kind, pl.v, pl.s, pal) });
       }
-      for (const f of plan.figures.get(k) ?? []) list.push({ oy: f.oy, draw: () => paintVillager(ctx, o, f.ox, f.oy, f.v, pal) });
+      if (!options.movingFigureTiles?.has(k)) {
+        for (const f of plan.figures.get(k) ?? []) list.push({ oy: f.oy, draw: () => paintVillager(ctx, o, f.ox, f.oy, f.v, pal) });
+      }
       list.sort((a, b) => a.oy - b.oy).forEach((s) => s.draw());
     },
   };

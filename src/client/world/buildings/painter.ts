@@ -92,6 +92,71 @@ export function roofHeightAt(app: Appearance, vol: Volume, mx: number, my: numbe
   return H + Math.max(0, Math.min(1, edge / run)) * R;
 }
 
+export interface ChimneyAnchor {
+  point: ScreenPoint;
+  seed: number;
+}
+
+export interface BuildingFlagAnchor {
+  base: ScreenPoint;
+  height: number;
+}
+
+interface ChimneySite {
+  x: number;
+  y: number;
+  base: number;
+  height: number;
+  smokeSeed: number;
+}
+
+function chimneySites(vol: Volume, app: Appearance, count: number, seed: number): ChimneySite[] {
+  if (vol.roofShape === 'flat') return [];
+  const width = vol.x1 - vol.x0;
+  const depth = vol.y1 - vol.y0;
+  const sites: ChimneySite[] = [];
+  for (let i = 0; i < count; i++) {
+    const t = count === 1 ? 0.28 + (seed % 5) * 0.06 : 0.22 + i * 0.5;
+    const alongX = ridgeAlongX(vol);
+    const x = alongX ? vol.x0 + width * t : vol.x0 + width / 2 - 0.1;
+    const y = alongX ? vol.y0 + depth / 2 - 0.1 : vol.y0 + depth * t;
+    sites.push({
+      x,
+      y,
+      base: roofHeightAt(app, vol, x + 0.1, y + 0.1) - 1.5,
+      height: app.chimneyHeight ?? 8,
+      smokeSeed: hash2(seed, i, 7),
+    });
+  }
+  return sites;
+}
+
+export function chimneyAnchors(o: Origin, app: Appearance, seed: number): ChimneyAnchor[] {
+  const anchors: ChimneyAnchor[] = [];
+  for (let index = 0; index < app.volumes.length; index++) {
+    const vol = app.volumes[index]!;
+    const count = index === 0 ? app.chimneys : 0;
+    for (const site of chimneySites(vol, app, count, seed)) {
+      if (site.smokeSeed > 0.6) continue;
+      anchors.push({
+        point: at(o, site.x + 0.1, site.y + 0.1, site.base + site.height + 1),
+        seed: site.smokeSeed,
+      });
+    }
+  }
+  return anchors;
+}
+
+export function buildingFlagAnchors(o: Origin, app: Appearance): BuildingFlagAnchor[] {
+  return app.extras.flatMap((extra) => {
+    if (extra.type !== 'flag') return [];
+    const vol = app.volumes[0]!;
+    const x = (vol.x0 + vol.x1) / 2;
+    const y = (vol.y0 + vol.y1) / 2;
+    return [{ base: at(o, x, y, roofHeightAt(app, vol, x, y)), height: 15 }];
+  });
+}
+
 // A box: south face, east face and top.
 export function box(
   ctx: CanvasRenderingContext2D,
@@ -123,6 +188,43 @@ function wallPoint(o: Origin, vol: Volume, face: Face, u: number, z: number): Sc
 
 function wallQuad(o: Origin, vol: Volume, face: Face, u0: number, u1: number, z0: number, z1: number): ScreenPoint[] {
   return [wallPoint(o, vol, face, u0, z0), wallPoint(o, vol, face, u1, z0), wallPoint(o, vol, face, u1, z1), wallPoint(o, vol, face, u0, z1)];
+}
+
+export interface WindowAnchor {
+  point: ScreenPoint;
+  chance: number;
+  phase: number;
+}
+
+export function buildingWindowAnchors(o: Origin, b: Building, app: Appearance): WindowAnchor[] {
+  if (app.windowHeight <= 0) return [];
+  const door = doorPlacement(b);
+  const anchors: WindowAnchor[] = [];
+  for (const vol of app.volumes) {
+    const plinth = app.plinth ? PLINTH_PX : 0;
+    const floorHeight = floorPxOf(app, vol);
+    for (const face of ['south', 'east'] as const) {
+      const lo = face === 'south' ? vol.x0 : vol.y0;
+      const hi = face === 'south' ? vol.x1 : vol.y1;
+      const doorOnFace = door?.face === face ? door : null;
+      const centres = windowCentres(lo, hi, app.windowSpacing);
+      for (let floor = 0; floor < vol.floors; floor++) {
+        const z0 = plinth + floor * floorHeight + floorHeight * (0.5 - app.windowHeight / 2) + 0.6;
+        const z1 = z0 + floorHeight * app.windowHeight;
+        for (const u of centres) {
+          if (doorOnFace && floor === 0 && Math.abs(u - doorOnFace.u) < DOOR_HALF + WIN_HALF + 0.1) continue;
+          if (app.door === 'gate' && floor === 0) continue;
+          const windowIndex = floor * 101 + Math.round(u * 20);
+          anchors.push({
+            point: wallPoint(o, vol, face, u, (z0 + z1) / 2),
+            chance: hash2(b.id, windowIndex, face === 'south' ? 271 : 272),
+            phase: hash2(b.id, windowIndex, face === 'south' ? 961 : 962),
+          });
+        }
+      }
+    }
+  }
+  return anchors;
 }
 
 // A disc lying on a wall (a clock face), as a polygon.
@@ -465,21 +567,21 @@ function paintSmoke(ctx: CanvasRenderingContext2D, from: ScreenPoint, r: number,
   ctx.restore();
 }
 
-function paintChimneys(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: Appearance, pal: BuildingPalette, count: number, seed: number): void {
-  if (vol.roofShape === 'flat') return;
+function paintChimneys(
+  ctx: CanvasRenderingContext2D,
+  o: Origin,
+  vol: Volume,
+  app: Appearance,
+  pal: BuildingPalette,
+  count: number,
+  seed: number,
+  includeSmoke: boolean,
+): void {
   const brick = pal.m.wallBrick;
-  const w = vol.x1 - vol.x0;
-  const d = vol.y1 - vol.y0;
-  for (let i = 0; i < count; i++) {
-    const t = count === 1 ? 0.28 + (seed % 5) * 0.06 : 0.22 + i * 0.5;
-    const alongX = ridgeAlongX(vol);
-    const mx = alongX ? vol.x0 + w * t : vol.x0 + w / 2 - 0.1;
-    const my = alongX ? vol.y0 + d / 2 - 0.1 : vol.y0 + d * t;
-    const base = roofHeightAt(app, vol, mx + 0.1, my + 0.1) - 1.5;
-    const chimneyHeight = app.chimneyHeight ?? 8;
-    box(ctx, o, mx, my, mx + 0.2, my + 0.2, base, base + chimneyHeight, brick, pal.m.iron.lit);
-    paintSmoke(ctx, at(o, mx + 0.1, my + 0.1, base + chimneyHeight + 1), hash2(seed, i, 7), pal);
-    fillPolygon(ctx, [at(o, mx - 0.05, my + 0.22, base + chimneyHeight), at(o, mx + 0.25, my + 0.22, base + chimneyHeight), at(o, mx + 0.25, my + 0.22, base + chimneyHeight + 1.2), at(o, mx - 0.05, my + 0.22, base + chimneyHeight + 1.2)], brick.dark);
+  for (const site of chimneySites(vol, app, count, seed)) {
+    box(ctx, o, site.x, site.y, site.x + 0.2, site.y + 0.2, site.base, site.base + site.height, brick, pal.m.iron.lit);
+    if (includeSmoke) paintSmoke(ctx, at(o, site.x + 0.1, site.y + 0.1, site.base + site.height + 1), site.smokeSeed, pal);
+    fillPolygon(ctx, [at(o, site.x - 0.05, site.y + 0.22, site.base + site.height), at(o, site.x + 0.25, site.y + 0.22, site.base + site.height), at(o, site.x + 0.25, site.y + 0.22, site.base + site.height + 1.2), at(o, site.x - 0.05, site.y + 0.22, site.base + site.height + 1.2)], brick.dark);
   }
 }
 
@@ -505,7 +607,16 @@ function paintAwning(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app:
   strokeLine(ctx, p(lo, out, zTop - 4.5), p(hi, out, zTop - 4.5), tone.dark, 1.1);
 }
 
-function paintExtra(ctx: CanvasRenderingContext2D, o: Origin, b: Building, app: Appearance, pal: BuildingPalette, extra: Extra, door: DoorPlacement | null): void {
+function paintExtra(
+  ctx: CanvasRenderingContext2D,
+  o: Origin,
+  b: Building,
+  app: Appearance,
+  pal: BuildingPalette,
+  extra: Extra,
+  door: DoorPlacement | null,
+  includeCloth: boolean,
+): void {
   const main = app.volumes[0]!;
   switch (extra.type) {
     case 'clock': {
@@ -573,10 +684,11 @@ function paintExtra(ctx: CanvasRenderingContext2D, o: Origin, b: Building, app: 
       break;
     }
     case 'flag': {
-      const vol = main;
-      const base = at(o, vol.x0 + (vol.x1 - vol.x0) * 0.5, vol.y0 + (vol.y1 - vol.y0) * 0.5, roofHeightAt(app, vol, (vol.x0 + vol.x1) / 2, (vol.y0 + vol.y1) / 2));
+      const base = buildingFlagAnchors(o, { ...app, extras: [extra] })[0]!.base;
       strokeLine(ctx, base, { sx: base.sx, sy: base.sy - 15 }, pal.m.iron.lit, 1);
-      fillPolygon(ctx, [{ sx: base.sx, sy: base.sy - 15 }, { sx: base.sx + 8, sy: base.sy - 13 }, { sx: base.sx, sy: base.sy - 10.5 }], pal.m.awnRed.lit);
+      if (includeCloth) {
+        fillPolygon(ctx, [{ sx: base.sx, sy: base.sy - 15 }, { sx: base.sx + 8, sy: base.sy - 13 }, { sx: base.sx, sy: base.sy - 10.5 }], pal.m.awnRed.lit);
+      }
       break;
     }
     case 'flowerBoxes': {
@@ -682,6 +794,7 @@ export function paintBuilding(
   app: Appearance,
   pal: BuildingPalette,
   seed: number,
+  options: { includeSmoke?: boolean; includeCloth?: boolean } = {},
 ): void {
   const door = doorPlacement(b);
   // Back to front: a volume nearer the viewer is drawn later and covers the ones behind.
@@ -701,7 +814,9 @@ export function paintBuilding(
     paintWalls(ctx, o, v, app, pal, door, here, seed);
     if (here && door) paintAwning(ctx, o, v, app, pal, door);
     paintRoof(ctx, o, v, app, pal, seed);
-    if (i === 0 || v.roofShape !== 'flat') paintChimneys(ctx, o, v, app, pal, i === 0 ? app.chimneys : 0, seed);
+    if (i === 0 || v.roofShape !== 'flat') {
+      paintChimneys(ctx, o, v, app, pal, i === 0 ? app.chimneys : 0, seed, options.includeSmoke ?? true);
+    }
   }
-  for (const extra of app.extras) paintExtra(ctx, o, b, app, pal, extra, door);
+  for (const extra of app.extras) paintExtra(ctx, o, b, app, pal, extra, door, options.includeCloth ?? true);
 }

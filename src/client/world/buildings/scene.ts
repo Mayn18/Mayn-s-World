@@ -42,6 +42,12 @@ export interface WallTile {
   along: 'x' | 'y';
 }
 
+export interface ScenePaintOptions {
+  animatedStatic?: boolean;
+  movingFigureTiles?: ReadonlySet<number>;
+  movingAnimalPropIds?: ReadonlySet<string>;
+}
+
 // A shadow's span across one tile, in tile-local x. `head` is the caster side and
 // `tail` the far end, so the two stepped edges fade along the whole shadow rather
 // than at every tile boundary.
@@ -55,10 +61,17 @@ interface ShadowSpan {
 export interface Scene {
   placements: Placement[];
   walls: WallTile[];
+  decor: DecorLayer | undefined;
   // Highest point of the picture a building reaches, in projection space.
   top: number;
   // Draws anything that belongs to tile (x, y) once its ground is down.
-  paintTile(ctx: CanvasRenderingContext2D, x: number, y: number, theme: Theme): void;
+  paintTile(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    theme: Theme,
+    options?: ScenePaintOptions,
+  ): void;
 }
 
 function peakHeight(app: Appearance): number {
@@ -215,8 +228,10 @@ export function buildScene(
   return {
     placements,
     walls: wallList,
+    decor,
     top,
-    paintTile(ctx, x, y, theme) {
+    paintTile(ctx, x, y, theme, options = {}) {
+      const animatedStatic = options.animatedStatic ?? true;
       const pal = paletteFor(theme);
       decor?.paintGround(ctx, x, y, pal);
       const spans = shadowsFor(theme).get(key(x, y));
@@ -268,11 +283,16 @@ export function buildScene(
       const wall = wallAt.get(key(x, y));
       if (wall) paintWallTile(ctx, { x, y, level: levels[y]![x]! }, wall.along, pal);
       for (const p of anchors.get(key(x, y)) ?? []) {
-        if (p.appearance) paintBuilding(ctx, p.origin, p.building, p.appearance, pal, p.building.id);
+        if (p.appearance) {
+          paintBuilding(ctx, p.origin, p.building, p.appearance, pal, p.building.id, {
+            includeSmoke: animatedStatic,
+            includeCloth: animatedStatic,
+          });
+        }
         else if (SPECIAL_KINDS.includes(p.building.kind)) paintSpecial(ctx, p.origin, p.building, pal);
-        else paintCastlePiece(ctx, p.origin, p.building, pal);
+        else paintCastlePiece(ctx, p.origin, p.building, pal, { includeCloth: animatedStatic });
       }
-      decor?.paintStanding(ctx, x, y, pal);
+      decor?.paintStanding(ctx, x, y, pal, options);
     },
   };
 }

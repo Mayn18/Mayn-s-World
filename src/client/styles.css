@@ -334,6 +334,28 @@ html[data-page-hidden] .ambient-sway {
   image-rendering: pixelated;
 }
 
+.world-animation-overlay {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+.world-motion-control {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: min(224px, calc(100vw - 32px));
+}
+
 /* Developer readout of the tile under the pointer. A small label over the world,
    not page content; it goes when real interaction exists. */
 .world-readout {
