@@ -8,6 +8,13 @@ import type { MaterialName } from '../themes';
 
 export type RoofShape = 'gable' | 'hip' | 'flat';
 export type DoorStyle = 'plain' | 'arched' | 'double' | 'wide' | 'gate';
+export type BuildingFamily =
+  | 'gabled-burgher'
+  | 'long-hall'
+  | 'corner-merchant'
+  | 'stepped-gable-row'
+  | 'workshop'
+  | 'inn-tavern';
 
 // A box of building with its own roof. Coordinates are tiles from the building's
 // north-west corner and must lie inside its footprint.
@@ -26,6 +33,7 @@ export interface Volume {
   wall?: MaterialName;
   // Overrides the building's storey height for this volume (a tower is taller).
   floorPx?: number;
+  ridgeOffset?: number;
 }
 
 export type Extra =
@@ -38,9 +46,13 @@ export type Extra =
   | { type: 'sign'; colour: MaterialName }
   | { type: 'steps' }
   | { type: 'barnDoor' }
-  | { type: 'wheel' };
+  | { type: 'wheel' }
+  | { type: 'dormer' }
+  | { type: 'steppedGable' }
+  | { type: 'hoist' };
 
 export interface Appearance {
+  family: BuildingFamily;
   volumes: Volume[];
   wall: MaterialName;
   roof: MaterialName;
@@ -68,4 +80,6 @@ export interface Appearance {
   quoins?: boolean;
   // A balcony over the door.
   balcony?: boolean;
+  wallTint?: -1 | 0 | 1;
+  chimneyHeight?: number;
 }

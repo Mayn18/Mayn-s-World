@@ -374,6 +374,37 @@ export function paintBed(ctx: CanvasRenderingContext2D, o: Origin, pal: Building
   }
 }
 
+export function paintKitchenYard(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, v: number): void {
+  const soil = mix(pal.woodDark, pal.leafDark, 0.25);
+  fillPolygon(ctx, [at(o, 0.1, 0.1, 0), at(o, 0.9, 0.1, 0), at(o, 0.9, 0.9, 0), at(o, 0.1, 0.9, 0)], soil);
+  for (let i = 0; i < 4; i++) {
+    const u = 0.18 + i * 0.18;
+    strokeLine(ctx, at(o, 0.14, u, 0), at(o, 0.86, u + (v - 0.5) * 0.025, 0), pal.leafLight, 0.9);
+  }
+  for (let i = 0; i < 6; i++) {
+    const p = at(o, 0.22 + (i % 3) * 0.25, 0.25 + Math.floor(i / 3) * 0.42, 0);
+    fillPixelRect(ctx, p.sx - 1, p.sy - 2, 2, 2, i % 2 === 0 ? pal.flowers[1]! : pal.leafLight);
+  }
+}
+
+export function paintWoodpileShedYard(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, v: number): void {
+  slab(ctx, o, 0.18, 0.18, 0.82, 0.82, 0, 3.2, pal.m.doorWood.lit, pal.m.doorWood.shade, pal.m.doorWood.light, pal.outline);
+  fillPolygon(ctx, [at(o, 0.12, 0.12, 3.2), at(o, 0.88, 0.12, 3.2), at(o, 0.5, 0.5, 8.2)], pal.m.roofBrown.lit);
+  fillPolygon(ctx, [at(o, 0.88, 0.12, 3.2), at(o, 0.88, 0.88, 3.2), at(o, 0.5, 0.5, 8.2)], pal.m.roofBrown.shade);
+  const p = at(o, 0.5 + (v - 0.5) * 0.2, 0.82, 0);
+  for (let i = 0; i < 3; i++) {
+    fillPixelRect(ctx, p.sx - 4 + i * 3, p.sy - 3 - i % 2, 2.4, 2.4, pal.woodDark);
+  }
+}
+
+export function paintBareWellYard(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, v: number): void {
+  const stone = pal.m.wallStone;
+  const c = at(o, 0.5 + (v - 0.5) * 0.12, 0.5, 0);
+  pixelEllipse(ctx, c.sx, c.sy, 7, 3.4, stone.shade);
+  fillPixelRect(ctx, c.sx - 5, c.sy - 5, 10, 5, stone.lit);
+  fillPixelRect(ctx, c.sx - 3, c.sy - 7, 6, 2, stone.light);
+}
+
 // Crop rows: thin lines along the tile in a muted tone. Tone and spacing come from the
 // field type; there is no random speckle.
 export function paintCropRows(ctx: CanvasRenderingContext2D, o: Origin, base: string, line: string, rows: number): void {

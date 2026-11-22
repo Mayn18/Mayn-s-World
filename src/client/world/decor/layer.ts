@@ -18,7 +18,7 @@ import type { RoadLayer } from '../roads/roadLayer';
 import type { TerrainModel } from '../terrain/model';
 import { type DecorPlan, planDecor, tileKey } from './plan';
 import { paintPlant } from './plants';
-import { type FenceSeg, paintBed, paintCropRows, paintFence, paintProp, paintVillager } from './props';
+import { type FenceSeg, paintBareWellYard, paintCropRows, paintFence, paintKitchenYard, paintProp, paintVillager, paintWoodpileShedYard } from './props';
 
 export interface DecorLayer {
   plan: DecorPlan;
@@ -63,8 +63,12 @@ export function buildDecorLayer(
   const fences = fenceSegments(data.fences, isRoad);
   const props = new Map<number, DecorData['props']>();
   for (const p of data.props) props.set(tileKey(p.x, p.y), [...(props.get(tileKey(p.x, p.y)) ?? []), p]);
-  const bedTiles = new Set<number>();
-  for (const yd of data.yards) for (let j = yd.y; j < yd.y + yd.d; j++) for (let i = yd.x; i < yd.x + yd.w; i++) bedTiles.add(tileKey(i, j));
+  const bedYards = new Map<number, (typeof data.yards)[number]>();
+  for (const yd of data.yards) {
+    for (let j = yd.y; j < yd.y + yd.d; j++) {
+      for (let i = yd.x; i < yd.x + yd.w; i++) bedYards.set(tileKey(i, j), yd);
+    }
+  }
 
   const origin = (x: number, y: number): Origin => ({ x, y, level: model.surface[y]![x]! });
   const paved = (x: number, y: number) => isRoad(x, y) || roads.plaza[y]![x]! || roads.decks[y]![x]! || model.terrain.water[y]![x]!;
@@ -74,12 +78,18 @@ export function buildDecorLayer(
     paintGround(ctx, x, y, pal) {
       const o = origin(x, y);
       const field = data.fields[y]![x]!;
-      if (field !== 0 && !paved(x, y) && !bedTiles.has(tileKey(x, y))) {
+      if (field !== 0 && !paved(x, y) && !bedYards.has(tileKey(x, y))) {
         if (field === FIELD_WHEAT) paintCropRows(ctx, o, mix(pal.m.roofThatch.lit, pal.leafLight, 0.2), mix(pal.m.roofThatch.dark, pal.m.roofThatch.lit, 0.4), 5);
         else if (field === FIELD_CROPS) paintCropRows(ctx, o, mix(pal.woodDark, pal.leaf, 0.3), mix(pal.leaf, pal.leafLight, 0.5), 4);
         else if (field === FIELD_STRAW) paintCropRows(ctx, o, mix(pal.m.roofThatch.light, pal.leafLight, 0.35), mix(pal.m.roofThatch.lit, pal.leafLight, 0.5), 3);
       }
-      if (bedTiles.has(tileKey(x, y)) && !paved(x, y)) paintBed(ctx, o, pal, hash2(x, y, 70));
+      const yard = bedYards.get(tileKey(x, y));
+      if (yard && !paved(x, y)) {
+        const type = hash2(yard.of, yard.x + yard.y, 247);
+        if (type < 1 / 3) paintKitchenYard(ctx, o, pal, hash2(x, y, 248));
+        else if (type < 2 / 3) paintWoodpileShedYard(ctx, o, pal, hash2(x, y, 249));
+        else paintBareWellYard(ctx, o, pal, hash2(x, y, 250));
+      }
     },
     paintStanding(ctx, x, y, pal) {
       const k = tileKey(x, y);

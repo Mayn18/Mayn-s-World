@@ -5,7 +5,7 @@ import { castleHeight } from './castle';
 import { SPECIAL_KINDS, specialHeight } from './specials';
 import { doorPlacement, roofHeightAt, windowCentres } from './painter';
 import { REVIEW_IDS, buildScene, wallTiles } from './scene';
-import { appearanceFor } from './styles';
+import { appearanceFor, appearanceForTown, familyFor, neighbourRuleHolds } from './styles';
 
 const byId = (id: number) => townBuildings.find((b) => b.id === id)!;
 
@@ -46,6 +46,21 @@ describe('appearance', () => {
     const a = appearanceFor(byId(55));
     const v = a.volumes[0]!;
     expect(roofHeightAt(a, v, (v.x0 + v.x1) / 2, (v.y0 + v.y1) / 2)).toBeGreaterThan(v.floors * a.floorPx);
+  });
+  it('maps the existing kinds onto all six named architectural families', () => {
+    const families = new Set(townBuildings.map(familyFor));
+    expect(families).toEqual(new Set([
+      'gabled-burgher',
+      'long-hall',
+      'corner-merchant',
+      'stepped-gable-row',
+      'workshop',
+      'inn-tavern',
+    ]));
+  });
+  it('holds the within-three-tile neighbour rule for the town set', () => {
+    const appearances = appearanceForTown(townBuildings);
+    expect(neighbourRuleHolds(townBuildings, appearances)).toBe(true);
   });
 });
 

@@ -9,9 +9,9 @@
 //   id        a repeatable "random" choice within those, so a given building always
 //             looks the same
 import type { Building } from '../data/buildings';
-import { hash2, pick } from './random';
+import { hash2, pick, seededToggle } from './random';
 import type { MaterialName } from '../themes';
-import type { Appearance, Extra, Volume } from './style';
+import type { Appearance, BuildingFamily, Extra, Volume } from './style';
 
 export type District = 'castle' | 'terraces' | 'plaza' | 'wharf' | 'country';
 
@@ -24,6 +24,15 @@ export function districtOf(b: Building): District {
   if (b.y >= 40 && b.x >= 30) return 'wharf';
   if (b.x < 30) return 'terraces';
   return 'plaza';
+}
+
+export function familyFor(b: Building): BuildingFamily {
+  if (['inn', 'tavern', 'cafe', 'bakery'].includes(b.kind)) return 'inn-tavern';
+  if (['smith', 'workshop', 'warehouse', 'market', 'boathouse', 'barn'].includes(b.kind)) return 'workshop';
+  if (['row', 'store', 'clinic', 'school'].includes(b.kind)) return 'stepped-gable-row';
+  if (['large', 'multi', 'townhall', 'postoffice', 'library', 'observatory', 'granary'].includes(b.kind)) return 'corner-merchant';
+  if (['cottage', 'family', 'lodge', 'mill', 'farm', 'greathall', 'stables', 'barracks', 'storehouse'].includes(b.kind)) return 'gabled-burgher';
+  return 'long-hall';
 }
 
 interface Palette {
@@ -57,6 +66,7 @@ function volume(w: number, d: number, floors: number, extra: Partial<Volume> = {
 
 function base(b: Building, wall: MaterialName, roof: MaterialName, volumes: Volume[], extra: Partial<Appearance> = {}): Appearance {
   return {
+    family: familyFor(b),
     volumes,
     wall,
     roof,
@@ -70,6 +80,8 @@ function base(b: Building, wall: MaterialName, roof: MaterialName, volumes: Volu
     chimneys: 1,
     awning: null,
     extras: [],
+    wallTint: (((b.id % 3) - 1) as -1 | 0 | 1),
+    chimneyHeight: seededToggle(b.id, 38, 0.5) ? 9 : 8,
     ...extra,
   };
 }
@@ -88,11 +100,11 @@ function plainHouse(b: Building, floors: number, r: (n: number) => number): Appe
     const split = Math.max(1, Math.round(b.d * 0.55));
     const wing = Math.max(1, Math.round(b.w * 0.5));
     volumes = [
-      volume(b.w, split, floors, { roofShape: 'gable', ridge: 'x' }),
-      { x0: 0, y0: split - 0.2, x1: wing, y1: b.d, floors, roofShape: 'gable', ridge: 'y' },
+      volume(b.w, split, floors, { roofShape: 'gable', ridge: 'x', ridgeOffset: (r(13) - 0.5) * 0.22 }),
+      { x0: 0, y0: split - 0.2, x1: wing, y1: b.d, floors, roofShape: 'gable', ridge: 'y', ridgeOffset: (r(14) - 0.5) * 0.22 },
     ];
   } else {
-    volumes = [volume(b.w, b.d, floors, { roofShape: hip ? 'hip' : 'gable' })];
+    volumes = [volume(b.w, b.d, floors, { roofShape: hip ? 'hip' : 'gable', ridgeOffset: (r(13) - 0.5) * 0.22 })];
   }
   if (wall === 'wallTimber' && roof === 'roofBrown') roof = 'roofSlate';
   return base(b, wall, roof, volumes, {
@@ -171,12 +183,13 @@ function merchantHouse(b: Building, r: (n: number) => number): Appearance {
   const wall = pick<MaterialName>(['wallPlaster', 'wallCream', 'wallSand', 'wallWhite'], r(1));
   const roof = pick<MaterialName>(district === 'wharf' ? ['roofSlate', 'roofBlue', 'roofBrown'] : ['roofRed', 'roofBrown', 'roofOrange', 'roofSlate'], r(2));
   // The ridge runs across the street frontage when the building is wider than deep.
-  const volumes: Volume[] = [volume(b.w, b.d, floors, { roofShape: 'gable', ridge: b.w >= b.d ? 'x' : 'y', pitch: 0.7 })];
+  const volumes: Volume[] = [volume(b.w, b.d, floors, { roofShape: 'gable', ridge: b.w >= b.d ? 'x' : 'y', pitch: 0.7, ridgeOffset: (r(13) - 0.5) * 0.22 })];
   if (b.w >= 4 && b.d >= 3 && r(5) < 0.5) {
     // A steep front gable (a dormer-like cross wing) over the door side.
     volumes.push({ x0: 0.4, y0: b.d - 1.4, x1: Math.min(2.4, b.w - 0.4), y1: b.d, floors: floors, roofShape: 'gable', ridge: 'y', pitch: 0.9 });
   }
   const extras: Extra[] = [{ type: 'sign', colour: pick<MaterialName>(['awnRed', 'awnBlue', 'awnGreen', 'awnYellow'], r(7)) }];
+  if (r(12) < 0.35) extras.push({ type: 'dormer' });
   if (r(8) < 0.4) extras.push({ type: 'flowerBoxes' });
   return base(b, wall, roof, volumes, {
     groundWall: 'wallStone',
@@ -201,10 +214,10 @@ function ordinaryHouse(b: Building, floors: number, r: (n: number) => number): A
   if (b.w >= 3 && b.d >= 2 && r(4) < 0.45) {
     // A low lean-to extension along the east side, under its own small roof.
     const ext = Math.min(1.2, b.w * 0.35);
-    volumes.push(volume(b.w - ext, b.d, floors, { roofShape: r(3) < 0.5 ? 'hip' : 'gable', ridge: 'y', pitch: 0.62 }));
+    volumes.push(volume(b.w - ext, b.d, floors, { roofShape: r(3) < 0.5 ? 'hip' : 'gable', ridge: 'y', pitch: 0.62, ridgeOffset: (r(13) - 0.5) * 0.22 }));
     volumes.push({ x0: b.w - ext, y0: 0, x1: b.w, y1: Math.max(1, b.d - 0.8), floors: 1, roofShape: 'gable', ridge: 'y', floorPx: 9, pitch: 0.5 });
   } else {
-    volumes.push(volume(b.w, b.d, floors, { roofShape: b.w === b.d || r(3) < 0.4 ? 'hip' : 'gable', ridge: b.w >= b.d ? 'x' : 'y', pitch: 0.6 }));
+    volumes.push(volume(b.w, b.d, floors, { roofShape: b.w === b.d || r(3) < 0.4 ? 'hip' : 'gable', ridge: b.w >= b.d ? 'x' : 'y', pitch: 0.6, ridgeOffset: (r(13) - 0.5) * 0.22 }));
   }
   return base(b, wall, roof, volumes, {
     timber: wall !== 'wallBrick' && wall !== 'wallTimber' && r(5) < 0.55,
@@ -268,12 +281,12 @@ export function appearanceFor(b: Building): Appearance {
       });
     }
     case 'workshop': {
-      return base(b, 'wallBlue', 'roofOrange', [volume(b.w, b.d, 2, { roofShape: 'hip', pitch: 0.5 })], {
+      return base(b, 'wallBlue', 'roofOrange', [volume(b.w, b.d, 2, { roofShape: 'gable', ridge: b.w >= b.d ? 'x' : 'y', pitch: 0.58 })], {
         timber: true,
         door: 'wide',
         shutters: 'awnGreen',
         chimneys: 2,
-        extras: [{ type: 'sign', colour: 'roofBrown' }],
+        extras: [{ type: 'sign', colour: 'roofBrown' }, { type: 'hoist' }],
       });
     }
     case 'signallab': {
@@ -374,8 +387,10 @@ export function appearanceFor(b: Building): Appearance {
         plinth: true,
         extras: [{ type: 'flowerBoxes' }, { type: 'sign', colour: 'awnYellow' }],
       });
-    case 'inn':
-      return base(b, 'wallCream', 'roofSlate', [volume(b.w, b.d, 3, { roofShape: 'gable', pitch: 0.5 })], {
+    case 'inn': {
+      const main = volume(b.w, Math.max(2, b.d - 1), 3, { roofShape: 'gable', ridge: 'x', pitch: 0.62 });
+      const stable = { x0: 0, y0: Math.max(1, b.d - 1.2), x1: Math.min(2.2, b.w), y1: b.d, floors: 1, roofShape: 'gable' as const, ridge: 'y' as const, floorPx: 12 };
+      return base(b, 'wallCream', 'roofSlate', [main, stable], {
         timber: true,
         awning: 'awnGreen',
         door: 'double',
@@ -384,6 +399,7 @@ export function appearanceFor(b: Building): Appearance {
         chimneys: 2,
         extras: [{ type: 'sign', colour: 'awnRed' }],
       });
+    }
     case 'tavern':
       return base(b, 'wallSand', district === 'wharf' ? 'roofBlue' : 'roofSlate', [volume(b.w, b.d, 2, { roofShape: 'hip' })], {
         timber: true,
@@ -449,6 +465,7 @@ export function appearanceFor(b: Building): Appearance {
         chimneys: 2,
         windowSpacing: 0.62,
         plinth: true,
+        extras: [{ type: 'steppedGable' }],
       });
     default:
       return house(b, area <= 6 ? 1 : 2, r);
@@ -463,3 +480,111 @@ export const DESIGNED_KINDS = [
 ] as const;
 
 export type { Extra };
+
+export function neighbourSignature(a: Appearance): {
+  family: BuildingFamily;
+  roof: MaterialName;
+  wallTint: -1 | 0 | 1;
+  ridge: 'x' | 'y' | 'hip';
+  storeys: number;
+} {
+  const main = a.volumes[0]!;
+  return {
+    family: a.family,
+    roof: main.roof ?? a.roof,
+    wallTint: a.wallTint ?? 0,
+    ridge: main.roofShape === 'gable' ? (main.ridge ?? 'x') : 'hip',
+    storeys: main.floors,
+  };
+}
+
+function isResidentialNeighbour(b: Building): boolean {
+  return !['tower', 'keep', 'gate', 'windmill', 'fountain', 'stall', 'bandstand', 'cathedral', 'chapel'].includes(b.kind);
+}
+
+export function neighbourRuleHolds(
+  buildings: readonly Building[],
+  appearances: ReadonlyMap<number, Appearance>,
+): boolean {
+  for (let i = 0; i < buildings.length; i++) {
+    const a = buildings[i]!;
+    if (!isResidentialNeighbour(a)) continue;
+    const sa = appearances.get(a.id);
+    if (!sa) continue;
+    for (let j = i + 1; j < buildings.length; j++) {
+      const b = buildings[j]!;
+      if (!isResidentialNeighbour(b)) continue;
+      const sb = appearances.get(b.id);
+      if (!sb) continue;
+      const gapX = Math.max(0, a.x - (b.x + b.w), b.x - (a.x + a.w));
+      const gapY = Math.max(0, a.y - (b.y + b.d), b.y - (a.y + a.d));
+      const distance = Math.max(gapX, gapY);
+      if (distance > 3) continue;
+      const x = neighbourSignature(sa);
+      const y = neighbourSignature(sb);
+      const differences =
+        Number(x.family !== y.family) +
+        Number(x.roof !== y.roof) +
+        Number(x.wallTint !== y.wallTint) +
+        Number(x.ridge !== y.ridge) +
+        Number(x.storeys !== y.storeys);
+      if (differences < 2) return false;
+    }
+  }
+  return true;
+}
+
+export function appearanceForTown(buildings: readonly Building[]): Map<number, Appearance> {
+  const result = new Map<number, Appearance>();
+  for (const b of buildings) result.set(b.id, appearanceFor(b));
+  for (let pass = 0; pass < 6; pass++) {
+    let changed = false;
+    for (let i = 0; i < buildings.length; i++) {
+      const a = buildings[i]!;
+      if (!isResidentialNeighbour(a)) continue;
+      const aa = result.get(a.id)!;
+      for (let j = i + 1; j < buildings.length; j++) {
+        const b = buildings[j]!;
+        if (!isResidentialNeighbour(b)) continue;
+        const bb = result.get(b.id)!;
+        const gapX = Math.max(0, a.x - (b.x + b.w), b.x - (a.x + a.w));
+        const gapY = Math.max(0, a.y - (b.y + b.d), b.y - (a.y + a.d));
+        if (Math.max(gapX, gapY) > 3) continue;
+
+        const x = neighbourSignature(aa);
+        const y = neighbourSignature(bb);
+        const differences =
+          Number(x.family !== y.family) +
+          Number(x.roof !== y.roof) +
+          Number(x.wallTint !== y.wallTint) +
+          Number(x.ridge !== y.ridge) +
+          Number(x.storeys !== y.storeys);
+        if (differences >= 2) continue;
+
+        const aaTint = aa.wallTint ?? 0;
+        const bbTint = bb.wallTint ?? 0;
+        const roofs: readonly MaterialName[] = ['roofRed', 'roofBrown', 'roofSlate', 'roofOrange', 'roofThatch'];
+        const alternateRoof = roofs.find((roof) => roof !== y.roof) ?? 'roofBrown';
+        result.set(a.id, {
+          ...aa,
+          wallTint: (aaTint === 1 ? -1 : aaTint + 1) as -1 | 0 | 1,
+          roof: alternateRoof,
+          volumes: aa.volumes.map((volume, index) => {
+            if (index !== 0) return volume;
+            const ridge = volume.roofShape === 'gable'
+              ? (volume.ridge === 'x' ? 'y' : 'x')
+              : volume.ridge;
+            return { ...volume, roof: alternateRoof, ridge, ridgeOffset: (a.id % 2 === 0 ? -0.1 : 0.1) };
+          }),
+        });
+        result.set(b.id, {
+          ...bb,
+          wallTint: (bbTint === -1 ? 1 : bbTint - 1) as -1 | 0 | 1,
+        });
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  return result;
+}

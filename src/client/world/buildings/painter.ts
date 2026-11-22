@@ -15,7 +15,7 @@ import {
 } from '../render/pixelArt';
 import { mix } from '../render/terrainPalette';
 import { type Origin, at } from './geometry';
-import { hash2 } from './random';
+import { hash2, seededToggle } from './random';
 import { formTone, type BuildingPalette, type Tone } from './palette';
 import type { Appearance, Extra, Volume } from './style';
 
@@ -84,8 +84,9 @@ export function roofHeightAt(app: Appearance, vol: Volume, mx: number, my: numbe
   const R = roofRise(vol);
   const run = Math.min(w, d) / 2 + OVERHANG;
   if (vol.roofShape === 'gable') {
-    if (ridgeAlongX(vol)) return H + Math.max(0, R * (1 - Math.abs(my - (vol.y0 + d / 2)) / (d / 2 + OVERHANG)));
-    return H + Math.max(0, R * (1 - Math.abs(mx - (vol.x0 + w / 2)) / (w / 2 + OVERHANG)));
+    const offset = vol.ridgeOffset ?? 0;
+    if (ridgeAlongX(vol)) return H + Math.max(0, R * (1 - Math.abs(my - (vol.y0 + d / 2 + offset)) / (d / 2 + OVERHANG)));
+    return H + Math.max(0, R * (1 - Math.abs(mx - (vol.x0 + w / 2 + offset)) / (w / 2 + OVERHANG)));
   }
   const edge = Math.min(my - vol.y0 + OVERHANG, vol.y1 + OVERHANG - my, mx - vol.x0 + OVERHANG, vol.x1 + OVERHANG - mx);
   return H + Math.max(0, Math.min(1, edge / run)) * R;
@@ -142,8 +143,14 @@ function paintWalls(
   pal: BuildingPalette,
   door: DoorPlacement | null,
   doorHere: boolean,
+  seed: number,
 ): void {
-  const wall = pal.m[vol.wall ?? app.wall];
+  const wallBase = pal.m[vol.wall ?? app.wall];
+  const wall = app.wallTint === -1
+    ? { ...wallBase, lit: wallBase.shade, shade: wallBase.dark, light: wallBase.lit }
+    : app.wallTint === 1
+      ? { ...wallBase, lit: wallBase.light, shade: wallBase.lit, light: wallBase.light }
+      : wallBase;
   const H = wallHeight(app, vol);
   const fpx = floorPxOf(app, vol);
   const pl = app.plinth ? PLINTH_PX : 0;
@@ -189,6 +196,11 @@ function paintWalls(
     if (app.jetty && vol.floors > 1) {
       fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, gwTop - 0.4, gwTop + 1.8), lit ? timber.lit : timber.shade);
       fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, gwTop - 1.4, gwTop - 0.4), lit ? timber.dark : timber.dark);
+      for (let i = 0; i < 3; i++) {
+        const u = lo + ((hi - lo) * (i + 0.5)) / 3;
+        fillPolygon(ctx, wallQuad(o, vol, face, u - 0.035, u + 0.035, gwTop - 1.4, gwTop + 1.8),
+          lit ? timber.dark : timber.shade);
+      }
     }
     if (app.quoins) {
       // Dressed corner stones, alternately long and short.
@@ -226,7 +238,7 @@ function paintWalls(
           if (doorOnFace && f === 0 && Math.abs(u - doorOnFace.u) < DOOR_HALF + WIN_HALF + 0.1) continue;
           if (app.door === 'gate' && f === 0) continue;
           const g = app.shutters;
-          if (g) {
+          if (g && hash2(seed, f * 101 + Math.round(u * 20), 229) < 0.3) {
             const sh = pal.m[g];
             for (const s of [-1, 1]) {
               const a = u + s * (WIN_HALF + 0.005);
@@ -298,8 +310,9 @@ function paintDoor(
 }
 
 // Roof planes and ridge lines. Returns nothing: heights come from roofHeightAt.
-function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: Appearance, pal: BuildingPalette): void {
+function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: Appearance, pal: BuildingPalette, seed: number): void {
   const roofTone = pal.m[vol.roof ?? app.roof];
+  const roofName = vol.roof ?? app.roof;
   const wallTone = pal.m[vol.wall ?? app.wall];
   const H = wallHeight(app, vol);
   const w = vol.x1 - vol.x0;
@@ -322,32 +335,46 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
   const eaveZ = H - 0.5;
   const cx = vol.x0 + w / 2;
   const cy = vol.y0 + d / 2;
+  const ridgeOffset = vol.ridgeOffset ?? 0;
+  const courseRows =
+    roofName === 'roofSlate' || roofName === 'roofDark' ? 5 :
+      roofName === 'roofThatch' ? 3 :
+        roofName === 'roofBrown' ? 4 : 4;
+  const patchColour = mix(roofTone.lit, pal.leafLight, roofName === 'roofThatch' ? 0.12 : 0.06);
 
   if (vol.roofShape === 'gable') {
     if (ridgeAlongX(vol)) {
       // A gable end on the east wall (a triangle of wall), then the lit south plane.
-      fillPolygon(ctx, [P(vol.x1, vol.y1, H), P(vol.x1, vol.y0, H), P(vol.x1, cy, H + R * (d / 2) / (d / 2 + ov))], wallTone.shade);
+      const ridgeCy = cy + ridgeOffset;
+      fillPolygon(ctx, [P(vol.x1, vol.y1, H), P(vol.x1, vol.y0, H), P(vol.x1, ridgeCy, H + R * (d / 2) / (d / 2 + ov))], wallTone.shade);
       const sw = P(vol.x0 - ov, vol.y1 + ov, eaveZ);
       const se = P(vol.x1 + ov, vol.y1 + ov, eaveZ);
-      const re = P(vol.x1 + ov, cy, H + R);
-      const rw = P(vol.x0 - ov, cy, H + R);
+      const re = P(vol.x1 + ov, ridgeCy, H + R);
+      const rw = P(vol.x0 - ov, ridgeCy, H + R);
       fillPolygon(ctx, [sw, se, re, rw], roofTone.lit);
-      paintPixelCourses(ctx, [sw, se, re, rw], 4, Math.max(3, Math.round(w)), {
+      paintPixelCourses(ctx, [sw, se, re, rw], courseRows, Math.max(3, Math.round(w)), {
         line: course,
         joint: courseShade,
       });
+      if (seededToggle(seed, 101, 0.62)) {
+        const u0 = vol.x0 + w * (0.18 + hash2(seed, 102, 238) * 0.18);
+        const u1 = u0 + 0.38;
+        fillPolygon(ctx, [P(u0, vol.y1 + ov, eaveZ), P(u1, vol.y1 + ov, eaveZ),
+          P(u1, cy + ridgeOffset, H + R), P(u0, cy + ridgeOffset, H + R)], patchColour);
+      }
       strokePixelPolygon(ctx, [sw, se, re, rw], roofTone.dark);
       strokeLine(ctx, rw, re, roofTone.light, 1.3);
       strokeLine(ctx, sw, se, roofTone.dark, 1.1);
       strokeLine(ctx, se, re, roofTone.dark, 0.9);
     } else {
-      fillPolygon(ctx, [P(vol.x0, vol.y1, H), P(vol.x1, vol.y1, H), P(cx, vol.y1, H + R * (w / 2) / (w / 2 + ov))], wallTone.lit);
+      const ridgeCx = cx + ridgeOffset;
+      fillPolygon(ctx, [P(vol.x0, vol.y1, H), P(vol.x1, vol.y1, H), P(ridgeCx, vol.y1, H + R * (w / 2) / (w / 2 + ov))], wallTone.lit);
       const se = P(vol.x1 + ov, vol.y1 + ov, eaveZ);
       const ne = P(vol.x1 + ov, vol.y0 - ov, eaveZ);
-      const rn = P(cx, vol.y0 - ov, H + R);
-      const rs = P(cx, vol.y1 + ov, H + R);
+      const rn = P(ridgeCx, vol.y0 - ov, H + R);
+      const rs = P(ridgeCx, vol.y1 + ov, H + R);
       fillPolygon(ctx, [se, ne, rn, rs], roofTone.shade);
-      paintPixelCourses(ctx, [se, ne, rn, rs], 4, Math.max(3, Math.round(d)), {
+      paintPixelCourses(ctx, [se, ne, rn, rs], courseRows, Math.max(3, Math.round(d)), {
         line: courseShade,
         joint: course,
       });
@@ -374,7 +401,7 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
   strokePixelPolygon(ctx, southPlane, roofTone.dark);
   strokePixelPolygon(ctx, eastPlane, roofTone.dark);
   if (alongX) {
-    paintPixelCourses(ctx, [sw, se, ridgeB, ridgeA], 4, Math.max(3, Math.round(w)), {
+    paintPixelCourses(ctx, [sw, se, ridgeB, ridgeA], courseRows, Math.max(3, Math.round(w)), {
       line: course,
       joint: courseShade,
     });
@@ -411,9 +438,10 @@ function paintChimneys(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, ap
     const mx = alongX ? vol.x0 + w * t : vol.x0 + w / 2 - 0.1;
     const my = alongX ? vol.y0 + d / 2 - 0.1 : vol.y0 + d * t;
     const base = roofHeightAt(app, vol, mx + 0.1, my + 0.1) - 1.5;
-    box(ctx, o, mx, my, mx + 0.2, my + 0.2, base, base + 8, brick, pal.m.iron.lit);
-    paintSmoke(ctx, at(o, mx + 0.1, my + 0.1, base + 9), hash2(seed, i, 7), pal);
-    fillPolygon(ctx, [at(o, mx - 0.02, my + 0.22, base + 8), at(o, mx + 0.22, my + 0.22, base + 8), at(o, mx + 0.22, my + 0.22, base + 9.2), at(o, mx - 0.02, my + 0.22, base + 9.2)], brick.dark);
+    const chimneyHeight = app.chimneyHeight ?? 8;
+    box(ctx, o, mx, my, mx + 0.2, my + 0.2, base, base + chimneyHeight, brick, pal.m.iron.lit);
+    paintSmoke(ctx, at(o, mx + 0.1, my + 0.1, base + chimneyHeight + 1), hash2(seed, i, 7), pal);
+    fillPolygon(ctx, [at(o, mx - 0.05, my + 0.22, base + chimneyHeight), at(o, mx + 0.25, my + 0.22, base + chimneyHeight), at(o, mx + 0.25, my + 0.22, base + chimneyHeight + 1.2), at(o, mx - 0.05, my + 0.22, base + chimneyHeight + 1.2)], brick.dark);
   }
 }
 
@@ -580,6 +608,31 @@ function paintExtra(ctx: CanvasRenderingContext2D, o: Origin, b: Building, app: 
       }
       break;
     }
+    case 'hoist': {
+      const z = wallHeight(app, main) + 3;
+      const u = (main.x0 + main.x1) / 2;
+      strokeLine(ctx, at(o, u - 0.55, main.y1, z), at(o, u + 0.55, main.y1, z), pal.m.iron.lit, 1.4);
+      strokeLine(ctx, at(o, u, main.y1, z), at(o, u, main.y1, z - 4), pal.m.iron.lit, 0.9);
+      break;
+    }
+    case 'dormer': {
+      const z = roofHeightAt(app, main, (main.x0 + main.x1) / 2, main.y1 - 0.35);
+      const u = (main.x0 + main.x1) / 2;
+      box(ctx, o, u - 0.32, main.y1 - 0.55, u + 0.32, main.y1 - 0.15, z - 1, z + 4.2, pal.m.wallCream);
+      break;
+    }
+    case 'steppedGable': {
+      if (!door) break;
+      const stone = pal.m.wallStone;
+      const u = door.u;
+      for (let i = 0; i < 3; i++) {
+        const half = 0.42 - i * 0.08;
+        const z = wallHeight(app, main) + i * 2.2;
+        fillPolygon(ctx, wallQuad(o, main, 'south', u - half, u + half, z, z + 1.8),
+          i % 2 === 0 ? stone.light : stone.lit);
+      }
+      break;
+    }
   }
   void b;
 }
@@ -607,9 +660,9 @@ export function paintBuilding(
 
   for (const { v, i } of order) {
     const here = doorVolume?.i === i;
-    paintWalls(ctx, o, v, app, pal, door, here);
+    paintWalls(ctx, o, v, app, pal, door, here, seed);
     if (here && door) paintAwning(ctx, o, v, app, pal, door);
-    paintRoof(ctx, o, v, app, pal);
+    paintRoof(ctx, o, v, app, pal, seed);
     if (i === 0 || v.roofShape !== 'flat') paintChimneys(ctx, o, v, app, pal, i === 0 ? app.chimneys : 0, seed);
   }
   for (const extra of app.extras) paintExtra(ctx, o, b, app, pal, extra, door);

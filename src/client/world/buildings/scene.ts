@@ -20,7 +20,7 @@ import { CASTLE_KINDS, WALL_HEIGHT, castleHeight, paintCastlePiece, paintWallTil
 import { type Origin } from './geometry';
 import { type BuildingPalette, buildingPalette } from './palette';
 import { paintBuilding, roofHeightAt } from './painter';
-import { appearanceFor } from './styles';
+import { appearanceForTown } from './styles';
 import { SPECIAL_KINDS, paintSpecial, specialHeight } from './specials';
 import type { Appearance } from './style';
 import type { DecorLayer } from '../decor/layer';
@@ -116,12 +116,13 @@ export function buildScene(
 ): Scene {
   const levels = model.terrain.levels;
   const chosen = only ? buildings.filter((b) => only.has(b.id)) : buildings;
+  const allAppearances = appearanceForTown(buildings);
 
   const placements: Placement[] = chosen.map((b) => {
     const level = levels[b.y]![b.x]!;
     const castle = CASTLE_KINDS.includes(b.kind);
     const special = SPECIAL_KINDS.includes(b.kind);
-    const appearance = castle || special ? null : appearanceFor(b);
+    const appearance = castle || special ? null : allAppearances.get(b.id) ?? null;
     const height = castle ? castleHeight(b) : special ? specialHeight(b) : peakHeight(appearance!);
     return { building: b, origin: { x: b.x, y: b.y, level }, height, appearance };
   });
