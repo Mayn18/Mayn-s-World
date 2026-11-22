@@ -330,6 +330,7 @@ html[data-page-hidden] .ambient-sway {
   height: 100%;
   cursor: inherit;
   -webkit-user-drag: none;
+  image-rendering: pixelated;
 }
 
 /* Developer readout of the tile under the pointer. A small label over the world,

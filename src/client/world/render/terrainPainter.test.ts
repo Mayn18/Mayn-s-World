@@ -105,14 +105,12 @@ describe('paintTerrain on the whole town', () => {
   });
 
   it('keeps everything inside the picture bounds', () => {
-    for (const p of polygons) {
-      for (const pt of p.points) {
-        expect(pt.sx).toBeGreaterThanOrEqual(-1e-6);
-        expect(pt.sx).toBeLessThanOrEqual(bounds.width + 1e-6);
-        expect(pt.sy).toBeGreaterThanOrEqual(-1e-6);
-        expect(pt.sy).toBeLessThanOrEqual(bounds.height + 1e-6);
-      }
-    }
+    expect(polygons.every((polygon) => polygon.points.every((point) => (
+      point.sx >= -1e-6
+      && point.sx <= bounds.width + 1e-6
+      && point.sy >= -1e-6
+      && point.sy <= bounds.height + 1e-6
+    )))).toBe(true);
   });
 
   it('matches the tile diamond exactly for a sample tile', () => {

@@ -1,16 +1,18 @@
-// Draws one building as flat-shaded polygons: walls, windows, doors, roofs and
-// their details.
+// Draws one building from grid-snapped surfaces and material-specific pixel detail.
 //
-// The style is the town's approved one: one flat colour per surface, light from the
-// upper left (south faces and south roof planes lit, east ones shaded), detail from
-// shape and silhouette rather than texture. The viewer is south-east, so only the
-// south and east walls and the roof planes facing them are ever drawn.
+// Light comes from the upper left (south faces and south roof planes lit, east ones
+// shaded). The viewer is south-east, so only those visible walls and roof planes draw.
 //
 // A building is a few volumes (boxes with roofs) drawn back to front, then its extras
 // (clock faces, a dome, a flag).
 import type { Building } from '../data/buildings';
 import type { ScreenPoint } from '../render/projection';
-import { fillPolygon, strokeLine } from '../render/shapes';
+import {
+  fillPixelPolygon as fillPolygon,
+  paintPixelCourses,
+  strokePixelLine as strokeLine,
+  strokePixelPolygon,
+} from '../render/pixelArt';
 import { mix } from '../render/terrainPalette';
 import { type Origin, at } from './geometry';
 import { hash2 } from './random';
@@ -102,9 +104,15 @@ export function box(
   tone: Tone,
   topColour = tone.light,
 ): void {
-  fillPolygon(ctx, [at(o, x0, y1, z0), at(o, x1, y1, z0), at(o, x1, y1, z1), at(o, x0, y1, z1)], tone.lit);
-  fillPolygon(ctx, [at(o, x1, y1, z0), at(o, x1, y0, z0), at(o, x1, y0, z1), at(o, x1, y1, z1)], tone.shade);
-  fillPolygon(ctx, [at(o, x0, y0, z1), at(o, x1, y0, z1), at(o, x1, y1, z1), at(o, x0, y1, z1)], topColour);
+  const south = [at(o, x0, y1, z0), at(o, x1, y1, z0), at(o, x1, y1, z1), at(o, x0, y1, z1)];
+  const east = [at(o, x1, y1, z0), at(o, x1, y0, z0), at(o, x1, y0, z1), at(o, x1, y1, z1)];
+  const top = [at(o, x0, y0, z1), at(o, x1, y0, z1), at(o, x1, y1, z1), at(o, x0, y1, z1)];
+  fillPolygon(ctx, south, tone.lit);
+  fillPolygon(ctx, east, tone.shade);
+  fillPolygon(ctx, top, topColour);
+  strokePixelPolygon(ctx, south, tone.dark);
+  strokePixelPolygon(ctx, east, tone.dark);
+  strokePixelPolygon(ctx, top, tone.dark);
 }
 
 // A point on a wall: `u` along it, `z` up it.
@@ -148,7 +156,15 @@ function paintWalls(
     const lo = face === 'south' ? vol.x0 : vol.y0;
     const hi = face === 'south' ? vol.x1 : vol.y1;
     // The wall itself.
-    fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, 0, H), lit ? wall.lit : wall.shade);
+    const wallFace = wallQuad(o, vol, face, lo, hi, 0, H);
+    fillPolygon(ctx, wallFace, lit ? wall.lit : wall.shade);
+    strokePixelPolygon(ctx, wallFace, wall.dark);
+    if (vol.wall === 'wallStone' || app.wall === 'wallStone' || vol.wall === 'wallBrick' || app.wall === 'wallBrick') {
+      paintPixelCourses(ctx, wallFace, Math.max(2, Math.floor(H / 8)), Math.max(2, Math.floor((hi - lo) / 0.8)), {
+        line: wall.shade,
+        joint: wall.dark,
+      });
+    }
     // A pale lip along the top and a shaded strip under the eaves give the wall depth.
     fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, H - 2.2, H), lit ? wall.shade : wall.dark);
     // A ground floor of another material, with a beam or sill line where the floors above begin.
@@ -278,14 +294,6 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
   const course = mix(roofTone.lit, pal.outline, 0.14);
   const courseShade = mix(roofTone.shade, pal.outline, 0.16);
   const P = (mx: number, my: number, z: number) => at(o, mx, my, z);
-  // Thin course lines across a roof plane, between the eave edge and the ridge edge.
-  const courses = (a0: ScreenPoint, a1: ScreenPoint, b0: ScreenPoint, b1: ScreenPoint, colour: string, n: number) => {
-    for (let i = 1; i < n; i++) {
-      const t = i / n;
-      const lerp = (p: ScreenPoint, q: ScreenPoint): ScreenPoint => ({ sx: p.sx + (q.sx - p.sx) * t, sy: p.sy + (q.sy - p.sy) * t });
-      strokeLine(ctx, lerp(a0, b0), lerp(a1, b1), colour, 0.7);
-    }
-  };
 
   if (vol.roofShape === 'flat') {
     const rim = 3;
@@ -309,7 +317,11 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
       const re = P(vol.x1 + ov, cy, H + R);
       const rw = P(vol.x0 - ov, cy, H + R);
       fillPolygon(ctx, [sw, se, re, rw], roofTone.lit);
-      courses(sw, se, rw, re, course, 4);
+      paintPixelCourses(ctx, [sw, se, re, rw], 4, Math.max(3, Math.round(w)), {
+        line: course,
+        joint: courseShade,
+      });
+      strokePixelPolygon(ctx, [sw, se, re, rw], roofTone.dark);
       strokeLine(ctx, rw, re, roofTone.light, 1.3);
       strokeLine(ctx, sw, se, roofTone.dark, 1.1);
       strokeLine(ctx, se, re, roofTone.dark, 0.9);
@@ -320,7 +332,11 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
       const rn = P(cx, vol.y0 - ov, H + R);
       const rs = P(cx, vol.y1 + ov, H + R);
       fillPolygon(ctx, [se, ne, rn, rs], roofTone.shade);
-      courses(se, ne, rs, rn, courseShade, 4);
+      paintPixelCourses(ctx, [se, ne, rn, rs], 4, Math.max(3, Math.round(d)), {
+        line: courseShade,
+        joint: course,
+      });
+      strokePixelPolygon(ctx, [se, ne, rn, rs], roofTone.dark);
       strokeLine(ctx, rs, rn, roofTone.lit, 1.3);
       strokeLine(ctx, se, ne, roofTone.dark, 1.1);
       strokeLine(ctx, se, rs, roofTone.dark, 0.9);
@@ -340,7 +356,14 @@ function paintRoof(ctx: CanvasRenderingContext2D, o: Origin, vol: Volume, app: A
   const eastPlane = alongX ? [se, ne, ridgeB] : [se, ne, ridgeA, ridgeB];
   fillPolygon(ctx, southPlane, roofTone.lit);
   fillPolygon(ctx, eastPlane, roofTone.shade);
-  if (alongX) courses(sw, se, ridgeA, ridgeB, course, 4);
+  strokePixelPolygon(ctx, southPlane, roofTone.dark);
+  strokePixelPolygon(ctx, eastPlane, roofTone.dark);
+  if (alongX) {
+    paintPixelCourses(ctx, [sw, se, ridgeB, ridgeA], 4, Math.max(3, Math.round(w)), {
+      line: course,
+      joint: courseShade,
+    });
+  }
   strokeLine(ctx, sw, se, roofTone.dark, 1.1);
   strokeLine(ctx, se, ne, roofTone.dark, 1.1);
   strokeLine(ctx, se, ridgeB, roofTone.light, 1); // the hip between the lit and shaded planes

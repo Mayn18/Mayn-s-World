@@ -1,21 +1,25 @@
 // The castle's own pieces: towers, the keep, gatehouses and the curtain wall.
 //
 // These are not houses with a different colour: they are massive stone work, battlemented
-// and much taller, so they get their own small painters. They use the same flat style and
-// lighting as every other building (lit south faces, shaded east faces) and the same
-// local frame (`at`), so they sit on the terrain exactly like a house does.
+// and much taller, so they get their own small painters. They use the same pixel-art
+// materials and lighting as every other building (lit south faces, shaded east faces)
+// and the same local frame (`at`), so they sit on the terrain exactly like a house does.
 //
-// DETAIL COMES FROM GEOMETRY, NOT TEXTURE (ADR-019). Walls carry a battered foot, a few
-// evenly spaced course lines, a belt course and a corbelled parapet; towers carry a flared
-// foot, arrow slits and a crown. Nothing here is random per pixel.
+// Walls carry a battered foot, staggered masonry courses, a belt course and a corbelled
+// parapet; towers carry a flared foot, arrow slits and a crown.
 import type { Building } from '../data/buildings';
 import type { ScreenPoint } from '../render/projection';
-import { fillPolygon, strokeLine } from '../render/shapes';
+import {
+  fillPixelPolygon as fillPolygon,
+  fillPixelRect,
+  paintPixelCourses,
+  strokePixelLine as strokeLine,
+} from '../render/pixelArt';
 import { mix } from '../render/terrainPalette';
 import { type Origin, at } from './geometry';
 import type { BuildingPalette, Tone } from './palette';
 import { box, doorPlacement } from './painter';
-import { cone, cylinder, ellipseRadii, onCylinder } from './solids';
+import { cone, cylinder, onCylinder } from './solids';
 import type { MaterialName } from '../themes';
 
 export const CASTLE_KINDS: readonly string[] = ['tower', 'keep', 'gate'];
@@ -43,13 +47,17 @@ function battlements(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: n
 // Ashlar course lines on a box's two visible faces. Even spacing, one thin line in a darker
 // tone, so the wall reads as laid stone without any speckle.
 function courses(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: number, x1: number, y1: number, z0: number, z1: number, tone: Tone): void {
-  ctx.save();
-  ctx.globalAlpha = 0.5;
-  for (let z = z0 + COURSE_PX; z < z1 - 1; z += COURSE_PX) {
-    strokeLine(ctx, at(o, x0, y1, z), at(o, x1, y1, z), tone.dark, 0.6);
-    strokeLine(ctx, at(o, x1, y1, z), at(o, x1, y0, z), tone.dark, 0.6);
-  }
-  ctx.restore();
+  const rows = Math.max(2, Math.floor((z1 - z0) / COURSE_PX));
+  const south = [at(o, x0, y1, z0), at(o, x1, y1, z0), at(o, x1, y1, z1), at(o, x0, y1, z1)];
+  const east = [at(o, x1, y1, z0), at(o, x1, y0, z0), at(o, x1, y0, z1), at(o, x1, y1, z1)];
+  paintPixelCourses(ctx, south, rows, Math.max(2, Math.round((x1 - x0) / 0.55)), {
+    line: tone.dark,
+    joint: tone.shade,
+  });
+  paintPixelCourses(ctx, east, rows, Math.max(2, Math.round((y1 - y0) / 0.55)), {
+    line: tone.dark,
+    joint: tone.shade,
+  });
 }
 
 // A stone block: battered foot, shaft with courses, a belt course and a corbelled top.
@@ -63,18 +71,29 @@ function stoneMass(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: num
 
 // A flame on a bracket: a torch beside a gate or door.
 function torch(ctx: CanvasRenderingContext2D, p: ScreenPoint, pal: BuildingPalette): void {
-  ctx.fillStyle = pal.m.iron.dark;
-  ctx.fillRect(p.sx - 0.5, p.sy - 3, 1, 3);
-  ctx.fillStyle = pal.flowers[1]!;
-  ctx.beginPath();
-  ctx.ellipse(p.sx, p.sy - 4.2, 1.3, 1.9, 0, 0, Math.PI * 2);
-  ctx.fill();
+  fillPixelRect(ctx, p.sx - 1, p.sy - 4, 2, 4, pal.m.iron.dark);
+  fillPolygon(ctx, [
+    { sx: p.sx, sy: p.sy - 8 },
+    { sx: p.sx + 2, sy: p.sy - 4 },
+    { sx: p.sx, sy: p.sy - 2 },
+    { sx: p.sx - 2, sy: p.sy - 4 },
+  ], pal.flowers[1]!);
 }
 
 function banner(ctx: CanvasRenderingContext2D, tip: ScreenPoint, height: number, pal: BuildingPalette, colour: MaterialName = 'awnRed'): void {
   strokeLine(ctx, tip, { sx: tip.sx, sy: tip.sy - height }, pal.m.iron.lit, 1);
   const top = tip.sy - height;
   fillPolygon(ctx, [{ sx: tip.sx, sy: top }, { sx: tip.sx + 8, sy: top + 2.5 }, { sx: tip.sx, sy: top + 5.5 }], pal.m[colour].lit);
+}
+
+function triangleCourses(ctx: CanvasRenderingContext2D, tip: ScreenPoint, left: ScreenPoint, right: ScreenPoint, tone: Tone): void {
+  for (const step of [0.25, 0.5, 0.75]) {
+    const along = (edge: ScreenPoint): ScreenPoint => ({
+      sx: tip.sx + (edge.sx - tip.sx) * step,
+      sy: tip.sy + (edge.sy - tip.sy) * step,
+    });
+    strokeLine(ctx, along(left), along(right), tone.dark);
+  }
 }
 
 // A four-sided pointed roof over a rectangle.
@@ -85,6 +104,8 @@ function pyramid(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: numbe
   const ne = at(o, x1, y0, z);
   fillPolygon(ctx, [sw, se, apex], tone.lit);
   fillPolygon(ctx, [se, ne, apex], tone.shade);
+  triangleCourses(ctx, apex, sw, se, tone);
+  triangleCourses(ctx, apex, se, ne, tone);
   strokeLine(ctx, se, apex, tone.dark, 0.8);
 }
 
@@ -99,8 +120,23 @@ function hipRoof(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: numbe
   const sw = at(o, x0, y1, z);
   const se = at(o, x1, y1, z);
   const ne = at(o, x1, y0, z);
-  fillPolygon(ctx, alongX ? [sw, se, rb, ra] : [sw, se, rb], tone.lit);
-  fillPolygon(ctx, alongX ? [se, ne, rb] : [se, ne, ra, rb], tone.shade);
+  if (alongX) {
+    fillPolygon(ctx, [sw, se, rb, ra], tone.lit);
+    fillPolygon(ctx, [se, ne, rb], tone.shade);
+    paintPixelCourses(ctx, [sw, se, rb, ra], 3, Math.max(2, Math.round(w)), {
+      line: tone.dark,
+      joint: tone.shade,
+    });
+    triangleCourses(ctx, rb, se, ne, tone);
+  } else {
+    fillPolygon(ctx, [sw, se, rb], tone.lit);
+    fillPolygon(ctx, [se, ne, ra, rb], tone.shade);
+    triangleCourses(ctx, rb, sw, se, tone);
+    paintPixelCourses(ctx, [se, ne, ra, rb], 3, Math.max(2, Math.round(d)), {
+      line: tone.dark,
+      joint: tone.shade,
+    });
+  }
   strokeLine(ctx, se, rb, tone.dark, 0.8);
   strokeLine(ctx, ra, rb, tone.light, 0.8);
 }
@@ -118,15 +154,29 @@ function slits(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: number,
   }
 }
 
-function archedOpening(ctx: CanvasRenderingContext2D, o: Origin, u: number, y: number, half: number, h: number, colour: string, face: 'south' | 'east' = 'south'): void {
+function archedOpening(
+  ctx: CanvasRenderingContext2D,
+  o: Origin,
+  u: number,
+  y: number,
+  half: number,
+  h: number,
+  colour: string,
+  face: 'south' | 'east' = 'south',
+  frameColour?: string,
+): void {
   const P = (a: number, z: number): ScreenPoint => (face === 'south' ? at(o, a, y, z) : at(o, y, a, z));
-  const pts: ScreenPoint[] = [P(u - half, 0), P(u - half, h - half * 12)];
-  for (let i = 0; i <= 8; i++) {
-    const a = Math.PI - (i / 8) * Math.PI;
-    pts.push(P(u + half * Math.cos(a), h - half * 12 + half * 12 * Math.sin(a)));
-  }
-  pts.push(P(u + half, 0));
-  fillPolygon(ctx, pts, colour);
+  const shape = (radius: number, height: number): ScreenPoint[] => {
+    const points: ScreenPoint[] = [P(u - radius, 0), P(u - radius, height - radius * 12)];
+    for (let i = 0; i <= 8; i++) {
+      const a = Math.PI - (i / 8) * Math.PI;
+      points.push(P(u + radius * Math.cos(a), height - radius * 12 + radius * 12 * Math.sin(a)));
+    }
+    points.push(P(u + radius, 0));
+    return points;
+  };
+  if (frameColour) fillPolygon(ctx, shape(half + 0.12, h + 2), frameColour);
+  fillPolygon(ctx, shape(half, h), colour);
 }
 
 // The iron grille inside a gate arch: a few vertical bars and rails.
@@ -138,18 +188,16 @@ function portcullis(ctx: CanvasRenderingContext2D, o: Origin, face: 'south' | 'e
 
 // Horizontal course lines wrapped round a cylinder: the front half of an ellipse at each course.
 function cylinderCourses(ctx: CanvasRenderingContext2D, o: Origin, cx: number, cy: number, r: number, z0: number, z1: number, tone: Tone): void {
-  const { rx, ry } = ellipseRadii(r);
-  ctx.save();
-  ctx.globalAlpha = 0.45;
-  ctx.strokeStyle = tone.dark;
-  ctx.lineWidth = 0.6;
   for (let z = z0 + COURSE_PX; z < z1 - 1; z += COURSE_PX) {
-    const c = at(o, cx, cy, z);
-    ctx.beginPath();
-    ctx.ellipse(c.sx, c.sy, rx, ry, 0, 0, Math.PI, false);
-    ctx.stroke();
+    for (let segment = 0; segment < 8; segment++) {
+      strokeLine(
+        ctx,
+        onCylinder(o, cx, cy, r, (segment / 8) * 180, z),
+        onCylinder(o, cx, cy, r, ((segment + 1) / 8) * 180, z),
+        tone.dark,
+      );
+    }
   }
-  ctx.restore();
 }
 
 // A corbelled parapet round a tower top: a projecting ring, then merlons set round it.
@@ -176,25 +224,28 @@ interface TowerSpec {
   style: TowerStyle;
   body: number; // height of the shaft
   roof: MaterialName;
+  radius: number;
   slits: number[];
 }
 
-// Corner towers carry coloured cones, as in the reference; the lesser towers are lower and
-// crenellated, so the castle's skyline is not one repeated shape.
-const TOWER_ROOFS: Record<number, MaterialName> = { 9: 'roofSlate', 10: 'roofRed', 11: 'roofBrown', 12: 'roofRed' };
-
 function towerSpec(b: Building): TowerSpec {
-  if (/Barbican/.test(b.name)) return { style: 'crown', body: 46, roof: 'roofSlate', slits: [14, 30] };
-  if (/Keep Gate/.test(b.name)) return { style: 'cone', body: 52, roof: 'roofSlate', slits: [16, 34] };
-  if (/North/.test(b.name)) return { style: 'crown', body: 84, roof: 'roofSlate', slits: [20, 40, 62] };
-  return { style: 'cone', body: 66, roof: TOWER_ROOFS[b.id] ?? 'roofRed', slits: [24, 30, 44] };
+  if (b.name === 'North Tower') return { style: 'crown', body: 84, roof: 'roofSlate', radius: 0.88, slits: [20, 40, 62] };
+  if (b.name === 'Barbican Tower W') return { style: 'crown', body: 42, roof: 'roofSlate', radius: 0.72, slits: [14, 30] };
+  if (b.name === 'Barbican Tower E') return { style: 'crown', body: 48, roof: 'roofSlate', radius: 0.78, slits: [14, 32] };
+  if (b.name === 'Keep Gate Tower W') return { style: 'cone', body: 42, roof: 'roofSlate', radius: 0.68, slits: [14, 28] };
+  if (b.name === 'Keep Gate Tower E') return { style: 'crown', body: 40, roof: 'roofRed', radius: 0.76, slits: [14, 28] };
+  if (b.name === 'NW Tower') return { style: 'cone', body: 72, roof: 'roofSlate', radius: 1.3, slits: [24, 48] };
+  if (b.name === 'NE Tower') return { style: 'cone', body: 62, roof: 'roofRed', radius: 1.22, slits: [22, 42] };
+  if (b.name === 'SW Tower') return { style: 'cone', body: 78, roof: 'roofBrown', radius: 1.38, slits: [24, 48, 64] };
+  if (b.name === 'SE Tower') return { style: 'cone', body: 66, roof: 'roofRed', radius: 1.24, slits: [22, 42] };
+  return { style: 'cone', body: 66, roof: 'roofSlate', radius: Math.min(b.w, b.d) / 2 - 0.12, slits: [24, 30, 44] };
 }
 
 export function castleHeight(b: Building): number {
-  if (b.kind === 'keep') return 150;
+  if (b.kind === 'keep') return 172;
   if (b.kind === 'tower') {
     const s = towerSpec(b);
-    return s.body + (s.style === 'cone' ? 40 : 14);
+    return s.body + (s.style === 'cone' ? 48 : 22);
   }
   return 52;
 }
@@ -206,7 +257,7 @@ function paintTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: 
   const spec = towerSpec(b);
   const cx = b.w / 2;
   const cy = b.d / 2;
-  const r = Math.min(b.w, b.d) / 2 - 0.12;
+  const r = Math.min(Math.min(b.w, b.d) / 2 - 0.12, spec.radius);
   // A flared foot, the shaft with its courses, then a corbel ring under the top.
   cylinder(ctx, o, cx, cy, r + 0.12, 0, 6, stone);
   cylinder(ctx, o, cx, cy, r + 0.05, 6, 12, stone);
@@ -217,8 +268,7 @@ function paintTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: 
   const degs = [20, 62, 105, 40, 84];
   zs.forEach((z, i) => {
     const p = onCylinder(o, cx, cy, r, degs[i % degs.length]!, z);
-    ctx.fillStyle = pal.glass.dark;
-    ctx.fillRect(p.sx - 0.7, p.sy - 5.5, 1.4, 5.5);
+    fillPixelRect(ctx, p.sx - 1, p.sy - 6, 2, 6, pal.glass.dark);
   });
   if (spec.style === 'crown') {
     crown(ctx, o, cx, cy, r, spec.body + 4, pal);
@@ -235,8 +285,8 @@ function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
   const stone = pal.m.wallStone;
   const slate = pal.m.roofSlate;
   const { w, d } = b;
-  const BODY = 74;
-  const fb = 1.05; // forebuilding depth
+  const BODY = 84;
+  const fb = 1.25; // forebuilding depth
 
   // The great block, set back from the front so the forebuilding stands proud of it.
   stoneMass(ctx, o, 0.2, 0.2, w - 0.2, d - fb, 0, BODY, pal);
@@ -259,12 +309,13 @@ function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
   strokeLine(ctx, at(o, 0.2, d - fb, 40), at(o, w - 0.2, d - fb, 40), stone.light, 1);
 
   // Forebuilding with the entrance, its own battlements and a flight of steps.
-  const fx0 = w / 2 - 1.5;
-  const fx1 = w / 2 + 1.5;
+  const gateHalf = Math.min(2.1, w * 0.28);
+  const fx0 = w / 2 - gateHalf;
+  const fx1 = w / 2 + gateHalf;
   stoneMass(ctx, o, fx0, d - fb, fx1, d, 0, 40, pal);
   const door = doorPlacement(b);
   if (door && door.face === 'south') {
-    archedOpening(ctx, o, w / 2, d, 0.55, 24, pal.m.doorWood.dark);
+    archedOpening(ctx, o, w / 2, d, 0.55, 24, pal.m.doorWood.dark, 'south', stone.light);
     portcullis(ctx, o, 'south', w / 2, d, 0.55, 24, pal);
     torch(ctx, at(o, w / 2 - 0.95, d, 18), pal);
     torch(ctx, at(o, w / 2 + 0.95, d, 18), pal);
@@ -280,17 +331,17 @@ function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
   battlements(ctx, o, 0.1, 0.1, w - 0.1, d - fb + 0.1, BODY + 4, stone);
 
   // A recessed upper storey and a high slate hip roof: the donjon crowns the whole castle.
-  const ux0 = 1.5;
-  const ux1 = w - 1.5;
+  const ux0 = 1.6;
+  const ux1 = w - 1.6;
   const uy0 = 1.0;
   const uy1 = d - fb - 0.9;
-  box(ctx, o, ux0, uy0, ux1, uy1, BODY + 4, BODY + 20, stone, stone.lit);
-  courses(ctx, o, ux0, uy0, ux1, uy1, BODY + 4, BODY + 20, stone);
+  box(ctx, o, ux0, uy0, ux1, uy1, BODY + 4, BODY + 24, stone, stone.lit);
+  courses(ctx, o, ux0, uy0, ux1, uy1, BODY + 4, BODY + 24, stone);
   for (const t of [0.2, 0.4, 0.6, 0.8]) {
     const u = ux0 + (ux1 - ux0) * t;
-    fillPolygon(ctx, [at(o, u - 0.08, uy1, BODY + 8), at(o, u + 0.08, uy1, BODY + 8), at(o, u + 0.08, uy1, BODY + 15), at(o, u - 0.08, uy1, BODY + 15)], pal.glass.dark);
+    fillPolygon(ctx, [at(o, u - 0.08, uy1, BODY + 10), at(o, u + 0.08, uy1, BODY + 10), at(o, u + 0.08, uy1, BODY + 19), at(o, u - 0.08, uy1, BODY + 19)], pal.glass.dark);
   }
-  hipRoof(ctx, o, ux0 - 0.15, uy0 - 0.15, ux1 + 0.15, uy1 + 0.15, BODY + 20, 22, slate);
+  hipRoof(ctx, o, ux0 - 0.15, uy0 - 0.15, ux1 + 0.15, uy1 + 0.15, BODY + 24, 32, slate);
 
   // Round corner turrets taller than the parapet, with terracotta cones. Far ones first.
   const corners: [number, number][] = [[0.5, 0.5], [w - 0.5, 0.5], [0.5, d - fb - 0.1], [w - 0.5, d - fb - 0.1]];
@@ -302,7 +353,7 @@ function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
       cylinder(ctx, o, cx, cy, 0.7, BODY + 18, BODY + 22, stone);
       cone(ctx, o, cx, cy, 0.78, BODY + 22, 20, pal.m.roofRed);
     });
-  banner(ctx, at(o, w / 2, (d - fb) / 2, BODY + 42), 14, pal);
+  banner(ctx, at(o, w / 2, (d - fb) / 2, BODY + 58), 16, pal);
 }
 
 // ---- gatehouses -------------------------------------------------------------------
@@ -321,8 +372,7 @@ function paintGateTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, p
   cylinderCourses(ctx, o, cx, cy, r, 5, 30, stone);
   for (const deg of [30, 85]) {
     const p = onCylinder(o, cx, cy, r, deg, 18);
-    ctx.fillStyle = pal.glass.dark;
-    ctx.fillRect(p.sx - 0.7, p.sy - 5, 1.4, 5);
+    fillPixelRect(ctx, p.sx - 1, p.sy - 6, 2, 6, pal.glass.dark);
   }
   cone(ctx, o, cx, cy, r + 0.1, 30, 16, pal.m.roofSlate);
 }
@@ -337,7 +387,7 @@ function paintGate(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
   const face = w >= d ? 'south' : 'east';
   const u = w >= d ? w / 2 : d / 2;
   const edge = w >= d ? d : w;
-  archedOpening(ctx, o, u, edge, 0.42, 28, pal.m.iron.dark, face);
+  archedOpening(ctx, o, u, edge, 0.42, 28, pal.m.iron.dark, face, stone.light);
   portcullis(ctx, o, face, u, edge, 0.42, 28, pal);
   if (face === 'south') {
     torch(ctx, at(o, u - 0.7, d, 20), pal);

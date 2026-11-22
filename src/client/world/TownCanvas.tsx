@@ -260,7 +260,7 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     const maxResolution = cacheResolution(bounds, fit.scale * MAX_ZOOM, dpr);
     const k = view.scale * dpr;
     ctx.setTransform(k, 0, 0, k, view.offsetX * dpr, view.offsetY * dpr);
-    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
       terrainCanvas.canvas,
       0,

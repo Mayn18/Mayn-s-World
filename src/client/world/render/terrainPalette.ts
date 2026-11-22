@@ -19,9 +19,8 @@ export interface FaceColours {
   line: string; // masonry courses and rock strata drawn across the face
 }
 
-// Colours for everything laid over the grass: streets, lanes, tracks, the square,
-// ramps, stairs and bridges. Like the rest of the palette they are plain mixes of
-// the theme's colours, with no texture and no per-tile randomness.
+// Colours for streets, lanes, tracks, the square, ramps, stairs and bridges.
+// Material detail is derived from these theme colours by the corresponding painters.
 export interface RoadColours {
   // The top of each kind of paving. Lightest to darkest: square, streets, lanes,
   // footpaths and narrow farm tracks.

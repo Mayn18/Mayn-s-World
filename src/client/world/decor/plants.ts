@@ -1,11 +1,14 @@
 // Painters for trees, bushes and other plants.
 //
-// Every plant follows the town's one lighting rule: a lit side to the upper left and a
-// shaded side to the lower right, as two or three flat shapes, never a gradient or
-// scattered texture. A plant is drawn as a few filled circles, ellipses or triangles
-// standing on a single ground point (the foot of its trunk).
+// Every plant follows the same upper-left light and lower-right shade. Stepped canopy
+// clusters, layered colour blocks and varied silhouettes keep the foliage readable.
 import type { BuildingPalette } from '../buildings/palette';
 import { mix } from '../render/terrainPalette';
+import {
+  fillPixelPolygon,
+  fillPixelRect,
+  strokePixelLine,
+} from '../render/pixelArt';
 
 export type PlantKind =
   | 'oak'
@@ -51,13 +54,26 @@ function leafPalette(pal: BuildingPalette, kind: PlantKind, v: number): Palette 
 }
 
 function disc(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, colour: string): void {
-  ctx.beginPath();
-  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fillStyle = colour;
-  ctx.fill();
+  const points = Array.from({ length: 16 }, (_, index) => {
+    const angle = (index / 16) * Math.PI * 2;
+    return { sx: x + Math.cos(angle) * rx, sy: y + Math.sin(angle) * ry };
+  });
+  fillPixelPolygon(ctx, points, colour);
 }
 
-// A soft-edged but flat patch of shade on the ground, falling to the lower right.
+function ellipsePath(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number): void {
+  ctx.beginPath();
+  for (let index = 0; index < 16; index++) {
+    const angle = (index / 16) * Math.PI * 2;
+    const sx = x + Math.cos(angle) * rx;
+    const sy = y + Math.sin(angle) * ry;
+    if (index === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+  }
+  ctx.closePath();
+}
+
+// A stepped patch of shade on the ground, falling to the lower right.
 function groundShadow(ctx: CanvasRenderingContext2D, f: Foot, rx: number, pal: BuildingPalette): void {
   ctx.save();
   ctx.globalAlpha = 0.17;
@@ -67,10 +83,13 @@ function groundShadow(ctx: CanvasRenderingContext2D, f: Foot, rx: number, pal: B
 
 // Lit disc over a shaded one, so the lower-right rim reads as shade.
 function ball(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, p: Palette): void {
-  disc(ctx, cx, cy, r, r, p.shade);
+  const silhouette = Array.from({ length: 16 }, (_, index) => {
+    const angle = (index / 16) * Math.PI * 2;
+    return { sx: cx + Math.cos(angle) * r, sy: cy + Math.sin(angle) * r };
+  });
+  fillPixelPolygon(ctx, silhouette, p.shade);
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ellipsePath(ctx, cx, cy, r, r);
   ctx.clip();
   disc(ctx, cx - r * 0.2, cy - r * 0.24, r * 0.92, r * 0.92, p.lit);
   ctx.restore();
@@ -78,8 +97,7 @@ function ball(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, 
 }
 
 function trunk(ctx: CanvasRenderingContext2D, f: Foot, h: number, w: number, colour: string): void {
-  ctx.fillStyle = colour;
-  ctx.fillRect(f.sx - w / 2, f.sy - h, w, h);
+  fillPixelRect(ctx, f.sx - w / 2, f.sy - h, w, h, colour);
 }
 
 function round(ctx: CanvasRenderingContext2D, f: Foot, kind: PlantKind, v: number, s: number, pal: BuildingPalette): void {
@@ -90,13 +108,13 @@ function round(ctx: CanvasRenderingContext2D, f: Foot, kind: PlantKind, v: numbe
   ball(ctx, f.sx, f.sy - 6 * s - r * 0.75, r, p);
   if (kind === 'willow') {
     // Long hanging strands down the lit side.
-    ctx.strokeStyle = mix(p.lit, pal.leafDark, 0.35);
-    ctx.lineWidth = 0.9;
     for (let i = -2; i <= 2; i++) {
-      ctx.beginPath();
-      ctx.moveTo(f.sx + i * r * 0.38, f.sy - 6 * s - r * 0.2);
-      ctx.lineTo(f.sx + i * r * 0.42, f.sy - 1.5 * s);
-      ctx.stroke();
+      strokePixelLine(
+        ctx,
+        { sx: f.sx + i * r * 0.38, sy: f.sy - 6 * s - r * 0.2 },
+        { sx: f.sx + i * r * 0.42, sy: f.sy - 1.5 * s },
+        mix(p.lit, pal.leafDark, 0.35),
+      );
     }
   }
 }
@@ -112,20 +130,16 @@ function spruce(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pa
     const baseY = f.sy - 3.5 * s - (i * h * 0.78) / layers;
     const half = (8.2 - (i * 5.2) / layers) * s;
     const apexY = baseY - (h * 0.62) / (layers * 0.62 + 0.9) - 4 * s;
-    ctx.beginPath();
-    ctx.moveTo(f.sx, apexY);
-    ctx.lineTo(f.sx - half, baseY);
-    ctx.lineTo(f.sx, baseY + 1.6 * s);
-    ctx.closePath();
-    ctx.fillStyle = lit;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(f.sx, apexY);
-    ctx.lineTo(f.sx + half, baseY);
-    ctx.lineTo(f.sx, baseY + 1.6 * s);
-    ctx.closePath();
-    ctx.fillStyle = shade;
-    ctx.fill();
+    fillPixelPolygon(ctx, [
+      { sx: f.sx, sy: apexY },
+      { sx: f.sx - half, sy: baseY },
+      { sx: f.sx, sy: baseY + 1.6 * s },
+    ], lit);
+    fillPixelPolygon(ctx, [
+      { sx: f.sx, sy: apexY },
+      { sx: f.sx + half, sy: baseY },
+      { sx: f.sx, sy: baseY + 1.6 * s },
+    ], shade);
   }
 }
 
@@ -138,8 +152,7 @@ function poplar(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pa
   const cy = f.sy - 3 * s - ry;
   disc(ctx, f.sx, cy, rx, ry, p.shade);
   ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(f.sx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ellipsePath(ctx, f.sx, cy, rx, ry);
   ctx.clip();
   disc(ctx, f.sx - rx * 0.28, cy - ry * 0.05, rx * 0.8, ry * 0.97, p.lit);
   ctx.restore();
@@ -194,24 +207,21 @@ function rock(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal:
 }
 
 function log(ctx: CanvasRenderingContext2D, f: Foot, _v: number, s: number, pal: BuildingPalette): void {
-  ctx.fillStyle = pal.woodDark;
-  ctx.fillRect(f.sx - 3 * s, f.sy - 1.6 * s, 6 * s, 1.8 * s);
-  ctx.fillStyle = pal.wood;
-  ctx.fillRect(f.sx - 3 * s, f.sy - 1.8 * s, 6 * s, 0.9 * s);
+  fillPixelRect(ctx, f.sx - 3 * s, f.sy - 1.6 * s, 6 * s, 1.8 * s, pal.woodDark);
+  fillPixelRect(ctx, f.sx - 3 * s, f.sy - 1.8 * s, 6 * s, 0.9 * s, pal.wood);
 }
 
 function reeds(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal: BuildingPalette): void {
-  ctx.strokeStyle = mix(pal.leaf, pal.leafLight, 0.4);
-  ctx.lineWidth = 0.9;
   for (let i = -1; i <= 1; i++) {
     const h = (6 + ((i + 1) * 1.7 + v * 3)) * s;
-    ctx.beginPath();
-    ctx.moveTo(f.sx + i * 1.7 * s, f.sy);
-    ctx.lineTo(f.sx + i * 1.9 * s + (i === 0 ? 0 : i * 0.6), f.sy - h);
-    ctx.stroke();
+    strokePixelLine(
+      ctx,
+      { sx: f.sx + i * 1.7 * s, sy: f.sy },
+      { sx: f.sx + i * 1.9 * s + (i === 0 ? 0 : i * 0.6), sy: f.sy - h },
+      mix(pal.leaf, pal.leafLight, 0.4),
+    );
   }
-  ctx.fillStyle = pal.woodDark;
-  ctx.fillRect(f.sx - 0.6 * s, f.sy - 7.6 * s, 1.2 * s, 2.2 * s);
+  fillPixelRect(ctx, f.sx - 0.6 * s, f.sy - 7.6 * s, 1.2 * s, 2.2 * s, pal.woodDark);
 }
 
 export function paintPlant(ctx: CanvasRenderingContext2D, f: Foot, kind: PlantKind, v: number, s: number, pal: BuildingPalette): void {

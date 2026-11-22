@@ -1,10 +1,8 @@
 // Draws what lies on the ground: streets, lanes, tracks, the Market Square, ramps,
 // stairs and bridges.
 //
-// Everything is a flat polygon in one colour, in the same plain style as the
-// terrain (terrainPainter.ts). There is no texture: a street is a pale surface with
-// a kerb, a lane or track is a plain earthen strip, stairs are a face with a lit
-// edge on every tread. Detail comes from shape, colour and light direction.
+// Paving and bridge boards use restrained, grid-aligned courses; roads retain their
+// existing footprints, kerbs, stairs, ramps and crossings.
 //
 // terrainPainter.ts calls these from inside its far-to-near loop, so a road is
 // painted straight after the grass tile it lies on, and nearer ground and walls
@@ -19,6 +17,8 @@ import { faceCorners } from './faceGeometry';
 import { LEVEL_PX, type ScreenPoint, mapToScreen, tileCorners } from './projection';
 import { fillPolygon, strokeLine } from './shapes';
 import type { TerrainPalette } from './terrainPalette';
+import { mix } from './terrainPalette';
+import { paintPixelCourses } from './pixelArt';
 
 // Widths are in picture pixels. A tile is 32 wide, so these are thin on purpose.
 const KERB_PX = 1.4;
@@ -92,7 +92,14 @@ export function paintGround(
     kind === 'plaza' && layer.plazaRim[y]?.[x]
       ? palette.roads.surface.plazaEdge
       : palette.roads.surface[kind];
-  fillPolygon(ctx, tileCorners(x, y, level), surface);
+  const tile = tileCorners(x, y, level);
+  fillPolygon(ctx, tile, surface);
+  if (kind === 'plaza' || (kind === 'main' && (x + y) % 3 === 0)) {
+    paintPixelCourses(ctx, tile, 2, 3, {
+      line: mix(surface, palette.roads.kerb, 0.25),
+      joint: mix(surface, palette.roads.kerb, 0.16),
+    });
+  }
 
   // A kerb along every side of paved ground that borders anything else.
   if (isPaved(kind)) {
@@ -134,7 +141,12 @@ function paintDeck(
   side('south', 2);
   side('east', 1);
 
-  fillPolygon(ctx, tileCorners(x, y, deckLevel), colours.deck);
+  const deck = tileCorners(x, y, deckLevel);
+  fillPolygon(ctx, deck, colours.deck);
+  paintPixelCourses(ctx, deck, road.kind === 'main' ? 2 : 3, road.kind === 'main' ? 3 : 1, {
+    line: mix(colours.deck, colours.face.shade, 0.3),
+    joint: mix(colours.deck, colours.face.shade, 0.2),
+  });
   strokeSides(ctx, x, y, deckLevel, open, colours.rail, RAIL_PX);
 }
 

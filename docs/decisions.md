@@ -239,21 +239,21 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 **Known limits:** picking tests only the top surface of tiles, so a point on a cliff face returns the tile visible behind it. Terrain colours come from the theme, but only one theme exists.
 
 
-## ADR-019: Clean flat-shaded rendering; the baked pixel-texture pipeline is withdrawn
+## ADR-019: Clean flat-shaded rendering; superseded by ADR-024
 
-**Status:** Accepted, pending owner review of the screenshot (Milestone 3 art-direction correction). Supersedes the rendering approach of the Milestone 3 commit `f271d36` and keeps the rest of that milestone's work.
+**Status:** Superseded by ADR-024. Its rejection of noisy, procedurally baked per-pixel texture remains in force.
 
 **Context:** Milestone 3 added roads, stairs, ramps and bridges by drawing the whole town into a software pixel buffer, with seeded per-pixel texture (grass speckle, cobbles, planks, strata) baked into one bitmap. On review the owner rejected the result: repetitive checkerboard grass, roads with many tiny contrasting details, noise over every surface, and a look unlike the approved Milestone 2 terrain. The approved direction is the Milestone 2 rendering: clean isometric surfaces, a restrained palette, clear elevation differences, no repeated patterns.
 
-**Decision:** the visual style is the Milestone 2 style: flat-colour polygons, one colour per material, light from the upper left, detail from shape and elevation rather than texture. The pixel buffer, the shader modules (`bake/`), the bitmap wrapper and the theme material ramps were removed. The Canvas 2D polygon painters were restored and the road work was redrawn in the same style on top of them.
+**Decision at the time:** the visual style was the Milestone 2 style: flat-colour polygons, one colour per material, light from the upper left, detail from shape and elevation rather than texture. The pixel buffer, the shader modules (`bake/`), the bitmap wrapper and the theme material ramps were removed. ADR-024 replaces this art direction with authored, structured pixel detail; it does not restore random per-pixel texture.
 
 **Kept from Milestone 3, unchanged in behaviour:** the per-tile road data (kind, direction, name), `roads/crossings.ts` (ramps and stairs across a road's whole width, bridge decks), the wall-versus-slope rule that breaks a retaining wall where a road climbs, the terrain model, elevation and depth ordering, and their tests. The Market Square (`roads/plaza.ts`) is kept as a renderer-side decision, not data.
 
 **Drawing:** `render/roadPainter.ts`, called from the painter's far-to-near loop. A street, lane, track or the square is a flat tile top over the grass (the grass under it is not drawn, which would otherwise show as a faint line along every tile edge). Streets and the square get a thin kerb along sides that meet other ground; lanes and tracks do not. A ramp is the road colour laid over the face it climbs; stairs add a lit edge for every tread. A bridge deck sits at the height of the land with a rail on open sides and a side that hangs to the water: stone for a main street, timber otherwise. All colours are mixes of theme colours in `terrainPalette.ts`.
 
-**Trade-offs:** no texture means large flat areas, so future detail (buildings, trees, props) carries the town's richness; if more variation is wanted it should be low-frequency and smooth, never per-tile or per-pixel. The painter redraws on resize rather than showing a cached bitmap; at 4,800 tiles this is cheap, and if it ever matters a cached canvas can be added without changing the look.
+**Trade-offs at the time:** the flat surfaces left broad areas visually quiet. ADR-024 addresses this with restrained, material-specific patterns authored on the existing painters.
 
-**Not done here:** buildings, vegetation, props. Work on them waits for the owner's approval of this direction.
+**Not done here:** buildings, vegetation and props. Their subsequent design is described by ADR-020 and ADR-024.
 
 
 ## ADR-020: The town is built from the Stage 2 v2 references: round towers, specialised buildings, a decor layer
@@ -329,4 +329,30 @@ bounded, so users can move the town out of the viewport.
 **Decision:** `TownCanvas` renders the existing painter output into offscreen canvases sized for the maximum camera zoom and device-pixel ratio. It first displays a 1x cache, then builds a higher-resolution cache in short animation-frame batches and swaps it in only when complete. The cache uses power-of-two scale tiers up to a 64 MiB per-image budget; it is not rebuilt for camera wheel or pan events, and higher-resolution results are reused when zooming back out. A larger viewport or DPR only triggers an upgrade when the current cache no longer covers the new maximum output scale. The existing terrain, building, decor and depth-order painters remain the source of truth; no geography or art is simplified.
 
 **Trade-offs:** an upgrade temporarily retains both the old and new full-world bitmaps, and the 64 MiB cap can require some upscaling on very high-DPR or large displays. The old cache remains visible while an upgrade is prepared, so there is no blank frame; the painter is split into contiguous depth-ordered batches to keep individual main-thread tasks short. The world is static today. Future animated or otherwise dynamic elements should use a separate layer or an explicit cache invalidation rather than repainting the full town during camera movement.
+
+## ADR-024 — Stage 2 pixel-art treatment on the current town geography
+**Status:** Accepted on `feat/town-world-redesign`.
+
+**Context:** the owner supplied seven Stage 2 reference images in `docs/reference-art/` and authorized them to supersede the flat-shaded rendering direction in ADR-019. The current redesigned map, including its castle hill, roads, river and destination footprints, remains authoritative and is not the Stage 2 reference geography.
+
+**Decision:** use the supplied images as the visual target: hand-authored isometric pixel art with a consistent world-space pixel grid, stepped outlines, warm controlled colours, material-specific highlights and shadows, and recognizable architectural silhouettes. Masonry courses, roof shingles, cobbles, foliage clusters and water highlights are deliberate reusable details, not random noise or checkerboard fills. Building families continue to be selected from their existing recipes and deterministic data. The existing Canvas 2D renderer, world data, projection, painter order, camera, interaction, and adaptive-resolution cache remain in place. Cache compositing uses nearest-neighbour sampling so pixel edges stay crisp at zoom.
+
+**Geography invariant:** this is an art redesign only. Do not edit `layout.json`, terrain coordinates/elevations, footprints, object positions/rotations, roads, rivers, district boundaries or navigation data. Any visual improvement must be achieved in renderer-side assets and painters.
+
+**Trade-offs:** authored material details add drawing work to cache generation, while nearest-neighbour scaling preserves pixel edges rather than smoothing them. The 64 MiB cache budget and incremental upgrade behavior remain; measure rendering on the full town and keep static details in the existing cached layer.
+
+**Validation:** review the castle, plaza, wharf, countryside, terraces and full aerial against the checked-in references at both fitted and zoomed scales. Run frontend typecheck, tests and production build. A change to town coordinates is out of scope.
+
+## ADR-025 — Terrace Cathedral within the owner-marked construction site
+**Status:** Accepted for the marked area in the owner's screenshot.
+
+**Context:** the owner later authorized a substantially larger religious landmark and explicitly permitted layout changes inside the red outline. This is a scoped exception to ADR-024's no-geography-change rule, not a general approval to alter the rest of the town.
+
+**Decision:**
+- Repurpose building 17 as the Terrace Cathedral at `(18, 21)`, footprint `5 × 8`, with its south entrance at `(20, 29)`. The footprint ends immediately before the existing Cottage Road.
+- Remove residential buildings 51, 52, 53 and 74, barrels at `(19, 21)` and `(21, 24)`, and the garden yard attached to building 53. Add a small `2 × 4` planted churchyard at `(15, 25)` west of the existing path. Preserve the Chapel Steps and Cottage Road geometry so the entrance stays connected to the street.
+- Keep terrain, elevations, other roads, buildings and decor unchanged. The marked boundary is interpreted approximately from the isometric screenshot; the selected footprint stays within its clear interior.
+- Use a dedicated pixel-art cathedral painter with a long stone nave, slate roof, stained-glass windows, buttresses, arched south entrance, steps and a tall rear bell tower.
+
+**Validation:** tests check the changed building count, footprint overlaps, road clearance and the continuous path from the cathedral door to Cottage Road. Review the full-town overview and close-up, then run typecheck, tests and production build.
 

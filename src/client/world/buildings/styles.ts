@@ -353,11 +353,6 @@ export function appearanceFor(b: Building): Appearance {
       return base(b, 'wallTimber', 'roofBlue', [volume(b.w, b.d, 1, { roofShape: 'gable', ridge: 'x', floorPx: 16, pitch: 0.5 })], {
         door: 'wide', plinth: true, windowHeight: 0.35, chimneys: 1, extras: [{ type: 'sign', colour: 'awnBlue' }],
       });
-    case 'chapel': {
-      const nave = volume(b.w, b.d, 2, { roofShape: 'gable', ridge: 'x', pitch: 0.6 });
-      const tower: Volume = { x0: b.w - 1.5, y0: b.d - 1.5, x1: b.w - 0.05, y1: b.d - 0.05, floors: 4, roofShape: 'hip', pitch: 2.1, roof: 'roofSlate', floorPx: 11 };
-      return base(b, 'wallCream', 'roofSlate', [nave, tower], { plinth: true, door: 'arched', windowHeight: 0.7, windowSpacing: 0.95, chimneys: 0, extras: [{ type: 'steps' }] });
-    }
     case 'observatory':
       return base(b, 'wallWhite', 'roofSlate', [volume(b.w, b.d, 3, { roofShape: 'flat', roof: 'roofSlate', floorPx: 11 })], {
         plinth: true, door: 'arched', windowHeight: 0.6, windowSpacing: 0.8, chimneys: 0, extras: [{ type: 'dome' }, { type: 'steps' }],
@@ -464,7 +459,7 @@ export function appearanceFor(b: Building): Appearance {
 export const DESIGNED_KINDS = [
   'townhall', 'library', 'postoffice', 'workshop', 'signallab', 'cottage', 'cafe', 'inn', 'tavern', 'store',
   'bakery', 'smith', 'warehouse', 'clinic', 'school', 'large', 'multi', 'family', 'row',
-  'barn', 'farm', 'granary', 'boathouse', 'chapel', 'observatory', 'mill', 'market', 'greathall', 'stables', 'lodge', 'barracks', 'storehouse',
+  'barn', 'farm', 'granary', 'boathouse', 'observatory', 'mill', 'market', 'greathall', 'stables', 'lodge', 'barracks', 'storehouse',
 ] as const;
 
 export type { Extra };

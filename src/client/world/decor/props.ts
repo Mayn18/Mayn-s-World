@@ -2,12 +2,33 @@
 // benches, wells, boats, haystacks, hives, sheep, crates, nets and scarecrows, plus
 // fences, garden beds and crop rows.
 //
-// Like the buildings they are flat-lit from the upper left, built from a few filled
-// shapes, and drawn when the painter reaches their tile, so anything nearer covers them.
+// Like the buildings they use grid-snapped shapes and upper-left lighting, and are drawn
+// when the painter reaches their tile, so anything nearer covers them.
 import type { BuildingPalette } from '../buildings/palette';
 import { at, type Origin } from '../buildings/geometry';
-import { fillPolygon, strokeLine } from '../render/shapes';
+import {
+  fillPixelPolygon as fillPolygon,
+  fillPixelRect,
+  strokePixelLine as strokeLine,
+  strokePixelPolygon,
+} from '../render/pixelArt';
 import { mix } from '../render/terrainPalette';
+
+function pixelEllipse(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, colour: string): void {
+  const points = Array.from({ length: 16 }, (_, index) => {
+    const angle = (index / 16) * Math.PI * 2;
+    return { sx: cx + Math.cos(angle) * rx, sy: cy + Math.sin(angle) * ry };
+  });
+  fillPolygon(ctx, points, colour);
+}
+
+function pixelEllipseOutline(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, colour: string): void {
+  const points = Array.from({ length: 16 }, (_, index) => {
+    const angle = (index / 16) * Math.PI * 2;
+    return { sx: cx + Math.cos(angle) * rx, sy: cy + Math.sin(angle) * ry };
+  });
+  strokePixelPolygon(ctx, points, colour);
+}
 
 // A small box standing on the ground at (x0..x1, y0..y1) tiles inside the tile at `o`.
 function slab(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: number, x1: number, y1: number, z0: number, z1: number, lit: string, shade: string, top: string): void {
@@ -20,22 +41,17 @@ function shadow(ctx: CanvasRenderingContext2D, o: Origin, cx: number, cy: number
   const c = at(o, cx + 0.12, cy + 0.1, 0);
   ctx.save();
   ctx.globalAlpha = 0.16;
-  ctx.beginPath();
-  ctx.ellipse(c.sx, c.sy, r * 22, r * 11, 0, 0, Math.PI * 2);
-  ctx.fillStyle = pal.shadow;
-  ctx.fill();
+  pixelEllipse(ctx, c.sx, c.sy, r * 22, r * 11, pal.shadow);
   ctx.restore();
 }
 
 function lamp(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
   const base = at(o, 0.5, 0.5, 0);
-  ctx.fillStyle = pal.m.iron.lit;
-  ctx.fillRect(base.sx - 0.7, base.sy - 13, 1.4, 13);
-  ctx.fillRect(base.sx - 1.6, base.sy - 1.2, 3.2, 1.2);
-  ctx.fillStyle = pal.m.gold.dark;
-  ctx.fillRect(base.sx - 2.4, base.sy - 18, 4.8, 5.8);
+  fillPixelRect(ctx, base.sx - 1, base.sy - 14, 2, 14, pal.m.iron.lit);
+  fillPixelRect(ctx, base.sx - 2, base.sy - 2, 4, 2, pal.m.iron.lit);
+  fillPixelRect(ctx, base.sx - 2, base.sy - 18, 4, 6, pal.m.gold.dark);
   ctx.fillStyle = pal.flowers[1]!;
-  ctx.fillRect(base.sx - 1.6, base.sy - 17, 3.2, 4);
+  fillPixelRect(ctx, base.sx - 2, base.sy - 16, 4, 4, pal.flowers[1]!);
 }
 
 function bench(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, alongX: boolean): void {
@@ -45,8 +61,7 @@ function bench(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, a
   // legs, then the back rest on the far side
   for (const [x, y] of alongX ? ([[0.28, 0.5], [0.72, 0.5]] as const) : ([[0.5, 0.28], [0.5, 0.72]] as const)) {
     const p = at(o, x, y, 0);
-    ctx.fillStyle = wood.dark;
-    ctx.fillRect(p.sx - 0.6, p.sy - 2.4, 1.2, 2.4);
+    fillPixelRect(ctx, p.sx - 1, p.sy - 2, 2, 2, wood.dark);
   }
   if (alongX) slab(ctx, o, a, b - 0.04, c, b, 4, 7.2, wood.lit, wood.shade, wood.light);
   else slab(ctx, o, a - 0.04, b, a, d, 4, 7.2, wood.lit, wood.shade, wood.light);
@@ -59,8 +74,7 @@ function well(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): v
   const wood = pal.m.doorWood;
   for (const [x, y] of [[0.27, 0.73], [0.73, 0.27]] as const) {
     const p = at(o, x, y, 0);
-    ctx.fillStyle = wood.dark;
-    ctx.fillRect(p.sx - 0.7, p.sy - 14, 1.4, 14 - 5.5);
+    fillPixelRect(ctx, p.sx - 1, p.sy - 14, 2, 8, wood.dark);
   }
   const roof = pal.m.roofRed;
   fillPolygon(ctx, [at(o, 0.14, 0.86, 13), at(o, 0.86, 0.86, 13), at(o, 0.5, 0.5, 18)], roof.lit);
@@ -77,24 +91,22 @@ function haystack(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette
   const hay = pal.m.roofThatch;
   const c = at(o, 0.5, 0.5, 0);
   shadow(ctx, o, 0.5, 0.5, 0.45, pal);
-  ctx.beginPath();
-  ctx.ellipse(c.sx, c.sy - 1, 7, 3.4, 0, 0, Math.PI * 2);
-  ctx.fillStyle = hay.shade;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(c.sx - 6.5, c.sy - 1);
-  ctx.quadraticCurveTo(c.sx - 5, c.sy - 13, c.sx, c.sy - 13);
-  ctx.quadraticCurveTo(c.sx + 5, c.sy - 13, c.sx + 6.5, c.sy - 1);
-  ctx.closePath();
-  ctx.fillStyle = hay.lit;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(c.sx + 1.5, c.sy - 12.6);
-  ctx.quadraticCurveTo(c.sx + 5, c.sy - 12, c.sx + 6.5, c.sy - 1);
-  ctx.lineTo(c.sx + 1.5, c.sy - 1);
-  ctx.closePath();
-  ctx.fillStyle = hay.shade;
-  ctx.fill();
+  pixelEllipse(ctx, c.sx, c.sy - 1, 7, 3.4, hay.shade);
+  fillPolygon(ctx, [
+    { sx: c.sx - 6.5, sy: c.sy - 1 },
+    { sx: c.sx - 5.5, sy: c.sy - 7 },
+    { sx: c.sx - 3, sy: c.sy - 11 },
+    { sx: c.sx, sy: c.sy - 13 },
+    { sx: c.sx + 3.5, sy: c.sy - 11 },
+    { sx: c.sx + 5.8, sy: c.sy - 7 },
+    { sx: c.sx + 6.5, sy: c.sy - 1 },
+  ], hay.lit);
+  fillPolygon(ctx, [
+    { sx: c.sx + 2.5, sy: c.sy - 11.5 },
+    { sx: c.sx + 4.5, sy: c.sy - 9 },
+    { sx: c.sx + 6.5, sy: c.sy - 1 },
+    { sx: c.sx + 1.5, sy: c.sy - 1 },
+  ], hay.shade);
 }
 
 function hive(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
@@ -102,26 +114,17 @@ function hive(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): v
   slab(ctx, o, 0.32, 0.32, 0.68, 0.68, 2, 6.5, w.lit, w.shade, w.light);
   slab(ctx, o, 0.28, 0.28, 0.72, 0.72, 6.5, 8, pal.m.awnYellow.lit, pal.m.awnYellow.shade, pal.m.awnYellow.light);
   const legs = at(o, 0.5, 0.7, 0);
-  ctx.fillStyle = pal.m.doorWood.dark;
-  ctx.fillRect(legs.sx - 3, legs.sy - 2, 1.2, 2);
-  ctx.fillRect(legs.sx + 2, legs.sy - 2, 1.2, 2);
+  fillPixelRect(ctx, legs.sx - 3, legs.sy - 2, 2, 2, pal.m.doorWood.dark);
+  fillPixelRect(ctx, legs.sx + 2, legs.sy - 2, 2, 2, pal.m.doorWood.dark);
 }
 
 function sheep(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, v: number): void {
   const c = at(o, 0.3 + v * 0.4, 0.5, 0);
-  ctx.fillStyle = pal.outline;
-  ctx.fillRect(c.sx - 1.8, c.sy - 1.8, 0.9, 1.8);
-  ctx.fillRect(c.sx + 1, c.sy - 1.8, 0.9, 1.8);
-  ctx.beginPath();
-  ctx.ellipse(c.sx, c.sy - 3.2, 3.2, 2.2, 0, 0, Math.PI * 2);
-  ctx.fillStyle = pal.white;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(c.sx + 1.2, c.sy - 2.6, 2.2, 1.4, 0, 0, Math.PI);
-  ctx.fillStyle = mix(pal.white, pal.outline, 0.22);
-  ctx.fill();
-  ctx.fillStyle = pal.outline;
-  ctx.fillRect(c.sx + 3, c.sy - 4.4, 1.9, 1.7);
+  fillPixelRect(ctx, c.sx - 2, c.sy - 2, 2, 2, pal.outline);
+  fillPixelRect(ctx, c.sx + 1, c.sy - 2, 2, 2, pal.outline);
+  pixelEllipse(ctx, c.sx, c.sy - 3, 4, 3, pal.white);
+  pixelEllipse(ctx, c.sx + 1, c.sy - 3, 2, 2, mix(pal.white, pal.outline, 0.22));
+  fillPixelRect(ctx, c.sx + 3, c.sy - 4, 2, 2, pal.outline);
 }
 
 function scarecrow(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
@@ -134,12 +137,9 @@ function scarecrow(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalett
   ctx.moveTo(c.sx - 5, c.sy - 9);
   ctx.lineTo(c.sx + 5, c.sy - 9);
   ctx.stroke();
-  ctx.fillStyle = pal.m.awnRed.lit;
-  ctx.fillRect(c.sx - 2, c.sy - 10, 4, 4.5);
-  ctx.fillStyle = pal.m.roofThatch.lit;
-  ctx.fillRect(c.sx - 1.5, c.sy - 14, 3, 3);
-  ctx.fillStyle = pal.m.roofBrown.lit;
-  ctx.fillRect(c.sx - 2.5, c.sy - 14.6, 5, 1.2);
+  fillPixelRect(ctx, c.sx - 2, c.sy - 10, 4, 4, pal.m.awnRed.lit);
+  fillPixelRect(ctx, c.sx - 2, c.sy - 14, 4, 4, pal.m.roofThatch.lit);
+  fillPixelRect(ctx, c.sx - 2, c.sy - 14, 6, 2, pal.m.roofBrown.lit);
 }
 
 function boat(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, v: number): void {
@@ -170,8 +170,7 @@ function net(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): vo
 
 function sign(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
   const c = at(o, 0.5, 0.5, 0);
-  ctx.fillStyle = pal.woodDark;
-  ctx.fillRect(c.sx - 0.7, c.sy - 10, 1.4, 10);
+  fillPixelRect(ctx, c.sx - 1, c.sy - 10, 2, 10, pal.woodDark);
   fillPolygon(ctx, [{ sx: c.sx - 4, sy: c.sy - 13 }, { sx: c.sx + 4, sy: c.sy - 11 }, { sx: c.sx + 4, sy: c.sy - 6 }, { sx: c.sx - 4, sy: c.sy - 8 }], pal.m.doorWood.lit);
 }
 
@@ -181,18 +180,16 @@ function barrel(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette):
   const wood = pal.m.doorWood;
   const c = at(o, 0.5, 0.5, 0);
   shadow(ctx, o, 0.5, 0.5, 0.2, pal);
-  ctx.beginPath();
-  ctx.moveTo(c.sx - 3.2, c.sy);
-  ctx.quadraticCurveTo(c.sx - 4.4, c.sy - 4, c.sx - 3.2, c.sy - 8);
-  ctx.lineTo(c.sx + 3.2, c.sy - 8);
-  ctx.quadraticCurveTo(c.sx + 4.4, c.sy - 4, c.sx + 3.2, c.sy);
-  ctx.closePath();
-  ctx.fillStyle = wood.lit;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(c.sx, c.sy - 8, 3.2, 1.6, 0, 0, Math.PI * 2);
-  ctx.fillStyle = wood.light;
-  ctx.fill();
+  fillPolygon(ctx, [
+    { sx: c.sx - 4, sy: c.sy },
+    { sx: c.sx - 4, sy: c.sy - 2 },
+    { sx: c.sx - 2, sy: c.sy - 2 },
+    { sx: c.sx - 2, sy: c.sy - 8 },
+    { sx: c.sx + 2, sy: c.sy - 8 },
+    { sx: c.sx + 4, sy: c.sy - 6 },
+    { sx: c.sx + 4, sy: c.sy },
+  ], wood.lit);
+  pixelEllipse(ctx, c.sx, c.sy - 8, 4, 2, wood.light);
   for (const y of [2.4, 5.6]) strokeLine(ctx, { sx: c.sx - 3.8, sy: c.sy - y }, { sx: c.sx + 3.8, sy: c.sy - y }, pal.m.iron.lit, 0.8);
 }
 
@@ -206,11 +203,7 @@ function cart(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, al
   if (alongX) slab(ctx, o, 0.15, 0.36, 0.85, 0.64, 7, 10, hay.lit, hay.shade, hay.light);
   else slab(ctx, o, 0.36, 0.15, 0.64, 0.85, 7, 10, hay.lit, hay.shade, hay.light);
   const w = alongX ? at(o, 0.5, 0.72, 3) : at(o, 0.72, 0.5, 3);
-  ctx.beginPath();
-  ctx.ellipse(w.sx, w.sy, 3.4, alongX ? 3.4 : 3.4, 0, 0, Math.PI * 2);
-  ctx.strokeStyle = pal.woodDark;
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
+  pixelEllipseOutline(ctx, w.sx, w.sy, 4, 4, pal.woodDark);
 }
 
 function woodpile(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
@@ -231,19 +224,12 @@ function cow(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, v: 
   const c = at(o, 0.3 + v * 0.4, 0.5, 0);
   const patch = v > 0.5;
   ctx.fillStyle = pal.outline;
-  for (const dx of [-3.6, -1.8, 1.6, 3.4]) ctx.fillRect(c.sx + dx, c.sy - 3, 0.9, 3);
-  ctx.beginPath();
-  ctx.ellipse(c.sx, c.sy - 5, 5, 2.9, 0, 0, Math.PI * 2);
-  ctx.fillStyle = patch ? pal.m.wallBrick.lit : pal.white;
-  ctx.fill();
+  for (const dx of [-4, -2, 2, 4]) fillPixelRect(ctx, c.sx + dx, c.sy - 3, 2, 4, pal.outline);
+  pixelEllipse(ctx, c.sx, c.sy - 5, 6, 4, patch ? pal.m.wallBrick.lit : pal.white);
   if (!patch) {
-    ctx.beginPath();
-    ctx.ellipse(c.sx - 1.2, c.sy - 5.6, 1.6, 1.1, 0, 0, Math.PI * 2);
-    ctx.fillStyle = pal.outline;
-    ctx.fill();
+    pixelEllipse(ctx, c.sx - 2, c.sy - 6, 2, 2, pal.outline);
   }
-  ctx.fillStyle = patch ? pal.m.wallBrick.shade : mix(pal.white, pal.outline, 0.3);
-  ctx.fillRect(c.sx + 4.2, c.sy - 7.4, 2.6, 2.6);
+  fillPixelRect(ctx, c.sx + 4, c.sy - 8, 2, 2, patch ? pal.m.wallBrick.shade : mix(pal.white, pal.outline, 0.3));
 }
 
 // A padded post and a crossbar: where the garrison practises.
@@ -257,14 +243,8 @@ function dummy(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): 
   ctx.moveTo(c.sx - 4.5, c.sy - 9.5);
   ctx.lineTo(c.sx + 4.5, c.sy - 9.5);
   ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(c.sx, c.sy - 6.5, 2.3, 3.2, 0, 0, Math.PI * 2);
-  ctx.fillStyle = pal.m.roofThatch.lit;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(c.sx, c.sy - 14.5, 1.8, 0, Math.PI * 2);
-  ctx.fillStyle = pal.m.roofThatch.shade;
-  ctx.fill();
+  pixelEllipse(ctx, c.sx, c.sy - 6, 2, 4, pal.m.roofThatch.lit);
+  pixelEllipse(ctx, c.sx, c.sy - 14, 2, 2, pal.m.roofThatch.shade);
 }
 
 // Washing on a line between two posts.
@@ -324,20 +304,13 @@ export function paintVillager(ctx: CanvasRenderingContext2D, o: Origin, ox: numb
   const shirt = shirts[Math.floor(v * shirts.length) % shirts.length]!;
   ctx.save();
   ctx.globalAlpha = 0.16;
-  ctx.beginPath();
-  ctx.ellipse(c.sx + 1.2, c.sy, 2.6, 1.2, 0, 0, Math.PI * 2);
-  ctx.fillStyle = pal.shadow;
-  ctx.fill();
+  pixelEllipse(ctx, c.sx + 2, c.sy, 2, 2, pal.shadow);
   ctx.restore();
-  ctx.fillStyle = pal.m.roofDark.lit;
-  ctx.fillRect(c.sx - 1.3, c.sy - 2.2, 1, 2.2);
-  ctx.fillRect(c.sx + 0.3, c.sy - 2.2, 1, 2.2);
-  ctx.fillStyle = shirt.lit;
-  ctx.fillRect(c.sx - 1.7, c.sy - 5.6, 3.4, 3.6);
-  ctx.fillStyle = pal.m.wallSand.lit;
-  ctx.fillRect(c.sx - 1.1, c.sy - 8, 2.2, 2.4);
-  ctx.fillStyle = v < 0.5 ? pal.m.roofBrown.dark : pal.m.roofThatch.dark;
-  ctx.fillRect(c.sx - 1.3, c.sy - 8.4, 2.6, 1);
+  fillPixelRect(ctx, c.sx - 2, c.sy - 2, 2, 2, pal.m.roofDark.lit);
+  fillPixelRect(ctx, c.sx, c.sy - 2, 2, 2, pal.m.roofDark.lit);
+  fillPixelRect(ctx, c.sx - 2, c.sy - 6, 4, 4, shirt.lit);
+  fillPixelRect(ctx, c.sx - 2, c.sy - 8, 4, 2, pal.m.wallSand.lit);
+  fillPixelRect(ctx, c.sx - 2, c.sy - 10, 4, 2, v < 0.5 ? pal.m.roofBrown.dark : pal.m.roofThatch.dark);
 }
 
 // ---- fences, beds and crops ---------------------------------------------------
@@ -357,10 +330,8 @@ export function paintFence(ctx: CanvasRenderingContext2D, o: Origin, seg: FenceS
   rail(5.2);
   for (const u of [0.08, 0.5, 0.92]) {
     const b = P(u, 0);
-    ctx.fillStyle = wood.dark;
-    ctx.fillRect(b.sx - 0.8, b.sy - 6.6, 1.6, 6.6);
-    ctx.fillStyle = wood.light;
-    ctx.fillRect(b.sx - 0.8, b.sy - 6.6, 0.8, 6.6);
+    fillPixelRect(ctx, b.sx - 1, b.sy - 6, 2, 6, wood.dark);
+    fillPixelRect(ctx, b.sx - 1, b.sy - 6, 2, 2, wood.light);
   }
 }
 
@@ -375,8 +346,7 @@ export function paintBed(ctx: CanvasRenderingContext2D, o: Origin, pal: Building
     const x = 0.28 + (i % 3) * 0.22;
     const y = 0.3 + Math.floor(i / 3) * 0.34;
     const p = at(o, x, y, 0);
-    ctx.fillStyle = flowerSet[i % 2]!;
-    ctx.fillRect(p.sx - 0.8, p.sy - 1.6, 1.6, 1.6);
+    fillPixelRect(ctx, p.sx - 1, p.sy - 2, 2, 2, flowerSet[i % 2]!);
   }
 }
 

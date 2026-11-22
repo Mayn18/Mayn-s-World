@@ -4,9 +4,9 @@ import { readBuildings } from './buildings';
 import { townBuildings, townTerrain } from './loader';
 
 describe('townBuildings (the real layout.json)', () => {
-  it('reads all 102 buildings with unique ids', () => {
-    expect(townBuildings).toHaveLength(102);
-    expect(new Set(townBuildings.map((b) => b.id)).size).toBe(102);
+  it('reads all 98 buildings with unique ids', () => {
+    expect(townBuildings).toHaveLength(98);
+    expect(new Set(townBuildings.map((b) => b.id)).size).toBe(98);
   });
 
   it('keeps every footprint inside the map and on one level', () => {

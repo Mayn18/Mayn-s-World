@@ -38,12 +38,14 @@ Each theme defines environment, palette, UI surfaces/borders, typography treatme
 Build one polished environment first. Architect for all six; do not deliver six incomplete scenes.
 
 ## Art direction for the town
-- Clean isometric surfaces in flat, restrained colour; light from the upper left, south faces lit and east faces shaded. Elevation reads from colour and faces.
-- Detail comes from shape, silhouette and light, not from texture. No per-pixel noise, no checkerboard or repeating patterns on grass, roads or water, and no tiny contrasting specks.
-- Natural colour variation is broad and smooth (by elevation, material, light), never per tile or per pixel.
-- Roads are readable at a glance: pale paved streets and square with a thin kerb, plainer earthen lanes and tracks, simple stairs, ramps and bridges.
-- Buildings follow the same language: readable silhouettes and distinct styles with controlled detail, never covered in small marks.
-- This is the direction approved at Milestone 2 and restored by ADR-019.
+- Follow the supplied Stage 2 reference images in `reference-art/`: detailed, crisp isometric pixel art with a consistent pixel grid and a warm, controlled palette.
+- Light comes from the upper left; south-facing surfaces are lit and east-facing surfaces are shaded. Dark pixel outlines, stepped silhouettes and distinct material colours make forms readable.
+- Detail is hand-placed and purposeful: masonry courses, timber framing, roof shingles, paving joints, foliage clusters and water highlights. Do not use random noise, checkerboard fill or indiscriminate speckle.
+- Buildings have recognizable silhouettes, material transitions, eaves, ridges, chimneys, framed windows and doors. Their architecture varies by family and district.
+- Roads and public spaces use legible cobbles, borders and intentional props. Water and vegetation use the reference's clear, layered pixel shapes.
+- The open background around the town uses a soft daylight-blue gradient, kept separate from terrain and water colours.
+- The Stage 2 images define the art style, not the current geography. The current `layout.json` and its positions remain authoritative.
+- See ADR-024 for the approved redesign and rendering constraints.
 
 ## Rendering and interaction
 - Use Canvas or CSS for atmosphere where appropriate.

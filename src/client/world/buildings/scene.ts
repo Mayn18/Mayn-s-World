@@ -202,7 +202,7 @@ export function buildScene(
 // the town needs to prove, plus the castle. Everything else comes after approval.
 export const REVIEW_IDS: ReadonlySet<number> = new Set([
   0, 1, 2, 3, 4, 5, // the six destinations
-  47, 51, 52, 58, // typical residential
+  17, 47, 58, // the cathedral and typical residential
   43, 44, 45, 62, 63, 84, // larger commercial
   7, 8, 9, 10, 11, 12, 13, 14, 15, 27, 28, 26, // the castle and its gatehouses
 ]);

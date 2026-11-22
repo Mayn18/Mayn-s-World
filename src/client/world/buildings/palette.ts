@@ -1,8 +1,7 @@
 // Building colours, worked out from the theme.
 //
 // Each material in the theme is a single colour. A building needs four versions of
-// it, all derived the same way terrain materials are, so the town keeps one flat,
-// restrained style and the lighting rule stays the same everywhere:
+// it, all derived consistently so pixel highlights follow the town's lighting rule:
 //   lit     the face turned to the upper-left light (south faces, south roof planes)
 //   shade   the face turned away (east faces, east roof planes)
 //   dark    lines and joints, and the underside of overhangs

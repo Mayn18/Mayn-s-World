@@ -6,6 +6,12 @@
 // right (east) part is shaded. A circle of radius r tiles lying on the ground projects
 // to an ellipse r * 22.6 px wide and r * 11.3 px tall in the 2:1 projection.
 import { type ScreenPoint } from '../render/projection';
+import {
+  fillPixelPolygon,
+  fillPixelRect,
+  strokePixelPolygon,
+  strokePixelLine,
+} from '../render/pixelArt';
 import { type Origin, at } from './geometry';
 import type { Tone } from './palette';
 
@@ -18,6 +24,21 @@ export function ellipseRadii(r: number): { rx: number; ry: number } {
 
 // How much of the right-hand side is in shade (fraction of the width).
 const SHADE_FROM = 0.2;
+
+function ellipsePoints(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  start = 0,
+  end = Math.PI * 2,
+): ScreenPoint[] {
+  const steps = Math.max(8, Math.ceil(Math.abs(end - start) / (Math.PI / 8)));
+  return Array.from({ length: steps + 1 }, (_, index) => {
+    const angle = start + ((end - start) * index) / steps;
+    return { sx: cx + Math.cos(angle) * rx, sy: cy + Math.sin(angle) * ry };
+  });
+}
 
 export function cylinder(
   ctx: CanvasRenderingContext2D,
@@ -32,23 +53,22 @@ export function cylinder(
   const { rx, ry } = ellipseRadii(r);
   const base = at(o, cx, cy, z0);
   const top = at(o, cx, cy, z1);
+  const side = [
+    ...ellipsePoints(base.sx, base.sy, rx, ry, 0, Math.PI),
+    ...ellipsePoints(top.sx, top.sy, rx, ry, Math.PI, 0),
+  ];
   ctx.save();
+  fillPixelPolygon(ctx, side, tone.lit);
+  strokePixelPolygon(ctx, side, tone.dark);
   ctx.beginPath();
-  ctx.ellipse(base.sx, base.sy, rx, ry, 0, 0, Math.PI, false);
-  ctx.lineTo(top.sx - rx, top.sy);
-  ctx.ellipse(top.sx, top.sy, rx, ry, 0, Math.PI, 0, true);
+  side.forEach(({ sx, sy }, index) => (index ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)));
   ctx.closePath();
-  ctx.fillStyle = tone.lit;
-  ctx.fill();
   ctx.clip();
-  ctx.fillStyle = tone.shade;
-  ctx.fillRect(base.sx + rx * SHADE_FROM, top.sy - ry, rx * 2, base.sy - top.sy + ry * 2);
+  fillPixelRect(ctx, base.sx + rx * SHADE_FROM, top.sy - ry, rx * 2, base.sy - top.sy + ry * 2, tone.shade);
   ctx.restore();
-  // A seam keeps the base from melting into the ground, and the flat top is lighter.
-  ctx.beginPath();
-  ctx.ellipse(top.sx, top.sy, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fillStyle = tone.light;
-  ctx.fill();
+  const cap = ellipsePoints(top.sx, top.sy, rx, ry, 0, Math.PI * 2);
+  fillPixelPolygon(ctx, cap, tone.light);
+  strokePixelPolygon(ctx, cap, tone.dark);
 }
 
 // A cone sitting on a cylinder's top, a little wider than it (the eaves).
@@ -65,33 +85,32 @@ export function cone(
   const { rx, ry } = ellipseRadii(r);
   const base = at(o, cx, cy, z);
   const apex: ScreenPoint = { sx: base.sx, sy: base.sy - rise };
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(base.sx - rx, base.sy);
-  ctx.lineTo(apex.sx, apex.sy);
-  ctx.lineTo(base.sx + rx, base.sy);
-  ctx.ellipse(base.sx, base.sy, rx, ry, 0, 0, Math.PI, false);
-  ctx.closePath();
-  ctx.fillStyle = tone.lit;
-  ctx.fill();
-  ctx.clip();
-  // Shaded east side: a triangle from the apex down to the right.
-  ctx.beginPath();
-  ctx.moveTo(apex.sx, apex.sy);
-  ctx.lineTo(base.sx + rx + 1, base.sy);
-  ctx.lineTo(base.sx + rx + 1, base.sy + ry + 1);
-  ctx.lineTo(base.sx + rx * 0.12, base.sy + ry + 1);
-  ctx.closePath();
-  ctx.fillStyle = tone.shade;
-  ctx.fill();
-  ctx.restore();
-  // One facet line from the tip, as in the reference's cone roofs.
-  ctx.beginPath();
-  ctx.moveTo(apex.sx, apex.sy);
-  ctx.lineTo(base.sx + rx * 0.12, base.sy + ry);
-  ctx.strokeStyle = tone.dark;
-  ctx.lineWidth = 0.7;
-  ctx.stroke();
+  const cap = ellipsePoints(base.sx, base.sy, rx, ry, 0, Math.PI);
+  const roof = [
+    { sx: base.sx - rx, sy: base.sy },
+    apex,
+    { sx: base.sx + rx, sy: base.sy },
+    ...cap.slice(1),
+  ];
+  fillPixelPolygon(ctx, roof, tone.lit);
+  const shade = [
+    apex,
+    { sx: base.sx + rx, sy: base.sy },
+    { sx: base.sx + rx * 0.12, sy: base.sy + ry },
+  ];
+  fillPixelPolygon(ctx, shade, tone.shade);
+  for (const step of [0.25, 0.5, 0.75]) {
+    const y = apex.sy + rise * step;
+    const halfWidth = rx * step;
+    strokePixelLine(
+      ctx,
+      { sx: base.sx - halfWidth, sy: y },
+      { sx: base.sx + halfWidth, sy: y },
+      tone.dark,
+    );
+  }
+  strokePixelPolygon(ctx, roof, tone.dark);
+  strokePixelLine(ctx, apex, { sx: base.sx + rx * 0.12, sy: base.sy + ry }, tone.dark);
 }
 
 // A point on a cylinder's surface facing the viewer: angle 0 is east, 90 degrees is south.

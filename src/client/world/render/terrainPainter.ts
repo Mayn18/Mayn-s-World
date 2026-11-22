@@ -28,10 +28,11 @@ import { type RoadLayer, groundKind } from '../roads/roadLayer';
 import type { TerrainModel } from '../terrain/model';
 import type { Bounds } from './bounds';
 import { type Side, faceCorners, faceLine } from './faceGeometry';
-import { type ScreenPoint, tileCorners } from './projection';
+import { LEVEL_PX, type ScreenPoint, tileCorners } from './projection';
 import { paintClimb, paintGround } from './roadPainter';
 import { fillPolygon, strokeLine } from './shapes';
 import type { TerrainPalette } from './terrainPalette';
+import { paintPixelCourses } from './pixelArt';
 import { paintWaterTile } from './waterPainter';
 
 // How tall the pale cap on top of a retaining wall is, in picture pixels.
@@ -54,9 +55,15 @@ function paintFace(
   const [topLeft, topRight, bottomRight, bottomLeft] = faceCorners(x, y, side, face);
   fillPolygon(ctx, [topLeft, topRight, bottomRight, bottomLeft], side === 'south' ? colours.lit : colours.shade);
 
-  // Masonry courses and rock strata: a thin line at every whole level between the
-  // top and the bottom, which also makes a tall cliff read as several steps tall.
-  if (face.kind === 'cliff' || face.kind === 'skirt' || face.kind === 'waterSkirt') {
+  if (face.kind === 'castle' || face.kind === 'wall') {
+    paintPixelCourses(
+      ctx,
+      [topLeft, topRight, bottomRight, bottomLeft],
+      Math.max(2, Math.ceil(((face.top - face.bottom) * LEVEL_PX) / 6)),
+      4,
+      { line: colours.line, joint: colours.line },
+    );
+  } else if (face.kind === 'cliff' || face.kind === 'skirt' || face.kind === 'waterSkirt') {
     for (let level = Math.ceil(face.bottom + 1e-9); level < face.top - 1e-9; level++) {
       const [from, to] = faceLine(x, y, side, level);
       strokeLine(ctx, from, to, colours.line);

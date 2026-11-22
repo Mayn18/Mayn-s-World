@@ -6,12 +6,13 @@
 //   - the surface sits slightly below the ground at the same level (model.ts,
 //     WATER_DROP_LEVELS), so the neighbouring land has a visible bank face
 //   - colour deepens with distance from land (terrain/shore.ts)
-//   - a pale line is drawn along each side of a water tile that touches land
+//   - pixel glints and a pale edge clarify the water against the shore
 // Nothing here invents water: it only draws the tiles the data marks as water.
 import type { TerrainModel } from '../terrain/model';
 import { WATER_STEPS, type TerrainPalette } from './terrainPalette';
 import { mapToScreen, tileCorners } from './projection';
 import { fillPolygon, strokeLine } from './shapes';
+import { strokePixelLine } from './pixelArt';
 
 // Each side of a tile as the pair of corners it joins, plus the neighbour it
 // faces: north side runs N-E, east side E-S, south side S-W, west side W-N.
@@ -33,6 +34,25 @@ export function paintWaterTile(
   // Distance 1 (touching land) uses step 0; far-from-shore tiles use the last.
   const step = Math.min(WATER_STEPS, Math.max(1, model.shore[y]![x]!)) - 1;
   fillPolygon(ctx, tileCorners(x, y, level), palette.water[step]!);
+
+  if ((x + 2 * y) % 8 === 0) {
+    ctx.save();
+    ctx.beginPath();
+    tileCorners(x, y, level).forEach(({ sx, sy }, index) => (
+      index === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy)
+    ));
+    ctx.closePath();
+    ctx.clip();
+    ctx.globalAlpha = 0.65;
+    const glint = palette.waterShore;
+    strokePixelLine(
+      ctx,
+      mapToScreen(x + 0.2, y + 0.28, level),
+      mapToScreen(x + 0.46, y + 0.28, level),
+      glint,
+    );
+    ctx.restore();
+  }
 
   // The shore line. Clipping to the tile keeps the stroke inside the water: a
   // stroke is centred on its line, so half of it would otherwise spill onto land.
