@@ -73,11 +73,17 @@ function ellipsePath(ctx: CanvasRenderingContext2D, x: number, y: number, rx: nu
   ctx.closePath();
 }
 
-// A stepped patch of shade on the ground, falling to the lower right.
+// A stepped patch of shade on the ground, falling to the lower right. The opacity
+// comes from the theme's shadow parameters so a diffuse theme fades it too; the two
+// discs are the one- or two-step edge.
 function groundShadow(ctx: CanvasRenderingContext2D, f: Foot, rx: number, pal: BuildingPalette): void {
   ctx.save();
-  ctx.globalAlpha = 0.17;
+  ctx.globalAlpha = pal.shadowOpacity * 0.3;
   disc(ctx, f.sx + rx * 0.45, f.sy + 0.5, rx, rx * 0.5, pal.shadow);
+  if (pal.shadowEdgeSteps === 2) {
+    ctx.globalAlpha = pal.shadowOpacity * 0.42;
+    disc(ctx, f.sx + rx * 0.55, f.sy + 0.3, rx * 0.58, rx * 0.28, pal.shadow);
+  }
   ctx.restore();
 }
 
@@ -96,15 +102,18 @@ function ball(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, 
   disc(ctx, cx - r * 0.38, cy - r * 0.42, r * 0.3, r * 0.26, p.high);
 }
 
-function trunk(ctx: CanvasRenderingContext2D, f: Foot, h: number, w: number, colour: string): void {
+function trunk(ctx: CanvasRenderingContext2D, f: Foot, h: number, w: number, colour: string, ink: string): void {
   fillPixelRect(ctx, f.sx - w / 2, f.sy - h, w, h, colour);
+  // A 1-2 lp contact band where the trunk meets the ground.
+  const band = Math.min(2, h * 0.35);
+  fillPixelRect(ctx, f.sx - w / 2, f.sy - band, w, band, mix(colour, ink, 0.4));
 }
 
 function round(ctx: CanvasRenderingContext2D, f: Foot, kind: PlantKind, v: number, s: number, pal: BuildingPalette): void {
   const p = leafPalette(pal, kind, v);
   const r = (kind === 'willow' ? 8.5 : 6.6 + v * 2) * s;
   groundShadow(ctx, f, r * 0.95, pal);
-  trunk(ctx, f, 6 * s, 2.2 * s, kind === 'birch' ? pal.white : pal.trunk);
+  trunk(ctx, f, 6 * s, 2.2 * s, kind === 'birch' ? pal.white : pal.trunk, pal.leafDark);
   ball(ctx, f.sx, f.sy - 6 * s - r * 0.75, r, p);
   if (kind === 'willow') {
     // Long hanging strands down the lit side.
@@ -125,7 +134,7 @@ function spruce(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pa
   const h = (31 + v * 11) * s;
   const layers = h > 36 * s ? 4 : 3;
   groundShadow(ctx, f, 7 * s, pal);
-  trunk(ctx, f, 5 * s, 2.4 * s, pal.trunk);
+  trunk(ctx, f, 5 * s, 2.4 * s, pal.trunk, pal.leafDark);
   for (let i = 0; i < layers; i++) {
     const baseY = f.sy - 3.5 * s - (i * h * 0.78) / layers;
     const half = (8.2 - (i * 5.2) / layers) * s;
@@ -148,7 +157,7 @@ function poplar(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pa
   const rx = 3.4 * s;
   const ry = (14 + v * 4) * s;
   groundShadow(ctx, f, 4 * s, pal);
-  trunk(ctx, f, 4 * s, 1.8 * s, pal.trunk);
+  trunk(ctx, f, 4 * s, 1.8 * s, pal.trunk, pal.leafDark);
   const cy = f.sy - 3 * s - ry;
   disc(ctx, f.sx, cy, rx, ry, p.shade);
   ctx.save();
@@ -161,7 +170,7 @@ function poplar(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pa
 function umbrella(ctx: CanvasRenderingContext2D, f: Foot, v: number, s: number, pal: BuildingPalette): void {
   const p = leafPalette(pal, 'oak', 0.1);
   groundShadow(ctx, f, 6 * s, pal);
-  trunk(ctx, f, 15 * s, 1.8 * s, pal.trunk);
+  trunk(ctx, f, 15 * s, 1.8 * s, pal.trunk, pal.leafDark);
   disc(ctx, f.sx, f.sy - 15 * s, 8 * s, 3.6 * s, p.shade);
   disc(ctx, f.sx - 0.8 * s, f.sy - 16 * s, 7.4 * s, 3.1 * s, p.lit);
   disc(ctx, f.sx + (v - 0.5) * 6 * s, f.sy - 19 * s, 4.4 * s, 2.2 * s, p.lit);

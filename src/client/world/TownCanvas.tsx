@@ -18,7 +18,7 @@ import { worldBounds } from './render/bounds';
 import { cacheResolution } from './render/cacheResolution';
 import { type PickedTile, pickTile } from './render/picking';
 import { type TileRange, paintTerrain } from './render/terrainPainter';
-import { terrainPalette } from './render/terrainPalette';
+import { mix, terrainPalette } from './render/terrainPalette';
 import {
   type CameraState,
   type ViewTransform,
@@ -125,6 +125,80 @@ const devTestTheme: Theme = import.meta.env.DEV
       },
     }
   : defaultTheme;
+
+// Dev-only preview parameter sets. Every colour is mixed from the Daytime theme,
+// so no new base colour enters the codebase and the production build (where
+// `import.meta.env.DEV` is false) drops the whole object.
+const devPreviewThemes: Record<'dusk' | 'night' | 'overcast', Theme> = import.meta.env.DEV
+  ? (() => {
+      const c = defaultTheme.colors;
+      const m = defaultTheme.materials;
+      const dusk: Theme = {
+        ...defaultTheme,
+        name: 'M2 Preview - Long Shadow Dusk',
+        colors: {
+          ...c,
+          skyTop: mix(c.skyTop, c.outline, 0.32),
+          skyMid: mix(c.skyMid, c.flowerYellow, 0.28),
+          skyLow: mix(c.skyLow, c.flowerYellow, 0.38),
+        },
+        shadow: {
+          color: mix(c.outline, c.glass, 0.25),
+          opacity: 0.38,
+          lengthScale: 1.35,
+          edgeSteps: 2,
+        },
+      };
+      const night: Theme = {
+        ...defaultTheme,
+        name: 'M2 Preview - Night Luminance Floor',
+        colors: {
+          ...c,
+          skyTop: mix(c.skyTop, c.outline, 0.82),
+          skyMid: mix(c.skyMid, c.outline, 0.72),
+          skyLow: mix(c.skyLow, c.outline, 0.58),
+          grass: mix(c.grass, c.outline, 0.45),
+          grassLight: mix(c.grassLight, c.outline, 0.42),
+          grassDark: mix(c.grassDark, c.outline, 0.4),
+          // A floor on stone and plaster keeps both legible after dark.
+          stone: mix(c.stone, c.outline, 0.18),
+          wall: mix(c.wall, c.outline, 0.22),
+        },
+        materials: {
+          ...m,
+          wallPlaster: mix(m.wallPlaster, c.outline, 0.2),
+          wallStone: mix(m.wallStone, c.outline, 0.22),
+          roofSlate: mix(m.roofSlate, c.outline, 0.15),
+        },
+        shadow: {
+          color: mix(c.outline, c.glass, 0.1),
+          opacity: 0.44,
+          lengthScale: 0.7,
+          edgeSteps: 2,
+        },
+      };
+      const overcast: Theme = {
+        ...defaultTheme,
+        name: 'M2 Preview - Overcast',
+        colors: {
+          ...c,
+          skyTop: mix(c.skyTop, c.stone, 0.5),
+          skyMid: mix(c.skyMid, c.stone, 0.45),
+          skyLow: mix(c.skyLow, c.stone, 0.4),
+          grass: mix(c.grass, c.stone, 0.28),
+          grassLight: mix(c.grassLight, c.stone, 0.25),
+          grassDark: mix(c.grassDark, c.stone, 0.25),
+        },
+        shadow: {
+          color: mix(c.outline, c.stone, 0.35),
+          opacity: 0.22,
+          lengthScale: 0.55,
+          edgeSteps: 1,
+        },
+      };
+      return { dusk, night, overcast };
+    })()
+  : { dusk: defaultTheme, night: defaultTheme, overcast: defaultTheme };
 
 // The whole 80 x 60 town terrain, filling whatever box it is placed in (the page gives it the whole
 // browser window; see .world-viewport in styles.css).
@@ -507,6 +581,8 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     const api = {
       switchTestTheme: () => setActiveTheme(devTestTheme),
       switchDaytime: () => setActiveTheme(defaultTheme),
+      switchPreview: (preview: 'dusk' | 'night' | 'overcast') =>
+        setActiveTheme(devPreviewThemes[preview]),
       repeatThemeSwitches: (count: number) => {
         const repeats = Math.max(0, Math.min(100, Math.floor(count)));
         for (let i = 0; i < repeats; i += 1) {
@@ -565,10 +641,17 @@ export function TownCanvas({ theme = defaultTheme }: TownCanvasProps) {
     };
     const devWindow = window as typeof window & {
       __maynsWorldM1?: typeof api;
+      __maynsWorldM2?: {
+        switchPreview: (preview: 'dusk' | 'night' | 'overcast') => boolean;
+      };
     };
     devWindow.__maynsWorldM1 = api;
+    devWindow.__maynsWorldM2 = {
+      switchPreview: (preview) => setActiveTheme(devPreviewThemes[preview]),
+    };
     return () => {
       delete devWindow.__maynsWorldM1;
+      delete devWindow.__maynsWorldM2;
     };
   }, []);
 

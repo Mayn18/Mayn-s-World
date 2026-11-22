@@ -31,17 +31,41 @@ function pixelEllipseOutline(ctx: CanvasRenderingContext2D, cx: number, cy: numb
 }
 
 // A small box standing on the ground at (x0..x1, y0..y1) tiles inside the tile at `o`.
-function slab(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: number, x1: number, y1: number, z0: number, z1: number, lit: string, shade: string, top: string): void {
+function slab(
+  ctx: CanvasRenderingContext2D,
+  o: Origin,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  z0: number,
+  z1: number,
+  lit: string,
+  shade: string,
+  top: string,
+  ink: string,
+): void {
   fillPolygon(ctx, [at(o, x0, y1, z0), at(o, x1, y1, z0), at(o, x1, y1, z1), at(o, x0, y1, z1)], lit);
   fillPolygon(ctx, [at(o, x1, y1, z0), at(o, x1, y0, z0), at(o, x1, y0, z1), at(o, x1, y1, z1)], shade);
+  // A 1-2 lp contact band where this volume meets whatever is below it, so
+  // crates, wells and benches sit on the ground instead of floating.
+  const band = Math.min(1.6, (z1 - z0) * 0.3);
+  if (band >= 0.6) {
+    fillPolygon(ctx, [at(o, x0, y1, z0), at(o, x1, y1, z0), at(o, x1, y1, z0 + band), at(o, x0, y1, z0 + band)], mix(lit, ink, 0.3));
+    fillPolygon(ctx, [at(o, x1, y1, z0), at(o, x1, y0, z0), at(o, x1, y0, z0 + band), at(o, x1, y1, z0 + band)], mix(shade, ink, 0.25));
+  }
   fillPolygon(ctx, [at(o, x0, y0, z1), at(o, x1, y0, z1), at(o, x1, y1, z1), at(o, x0, y1, z1)], top);
 }
 
 function shadow(ctx: CanvasRenderingContext2D, o: Origin, cx: number, cy: number, r: number, pal: BuildingPalette): void {
   const c = at(o, cx + 0.12, cy + 0.1, 0);
   ctx.save();
-  ctx.globalAlpha = 0.16;
+  ctx.globalAlpha = pal.shadowOpacity * 0.3;
   pixelEllipse(ctx, c.sx, c.sy, r * 22, r * 11, pal.shadow);
+  if (pal.shadowEdgeSteps === 2) {
+    ctx.globalAlpha = pal.shadowOpacity * 0.42;
+    pixelEllipse(ctx, c.sx + r * 4, c.sy + r * 1, r * 12, r * 5, pal.shadow);
+  }
   ctx.restore();
 }
 
@@ -57,20 +81,20 @@ function lamp(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): v
 function bench(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, alongX: boolean): void {
   const wood = pal.m.doorWood;
   const [a, b, c, d] = alongX ? [0.22, 0.4, 0.78, 0.6] : [0.4, 0.22, 0.6, 0.78];
-  slab(ctx, o, a, b, c, d, 2.4, 4, wood.lit, wood.shade, wood.light);
+  slab(ctx, o, a, b, c, d, 2.4, 4, wood.lit, wood.shade, wood.light, pal.outline);
   // legs, then the back rest on the far side
   for (const [x, y] of alongX ? ([[0.28, 0.5], [0.72, 0.5]] as const) : ([[0.5, 0.28], [0.5, 0.72]] as const)) {
     const p = at(o, x, y, 0);
     fillPixelRect(ctx, p.sx - 1, p.sy - 2, 2, 2, wood.dark);
   }
-  if (alongX) slab(ctx, o, a, b - 0.04, c, b, 4, 7.2, wood.lit, wood.shade, wood.light);
-  else slab(ctx, o, a - 0.04, b, a, d, 4, 7.2, wood.lit, wood.shade, wood.light);
+  if (alongX) slab(ctx, o, a, b - 0.04, c, b, 4, 7.2, wood.lit, wood.shade, wood.light, pal.outline);
+  else slab(ctx, o, a - 0.04, b, a, d, 4, 7.2, wood.lit, wood.shade, wood.light, pal.outline);
 }
 
 function well(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
   const stone = pal.m.wallStone;
   shadow(ctx, o, 0.5, 0.5, 0.4, pal);
-  slab(ctx, o, 0.24, 0.24, 0.76, 0.76, 0, 5.5, stone.lit, stone.shade, pal.glass.shade);
+  slab(ctx, o, 0.24, 0.24, 0.76, 0.76, 0, 5.5, stone.lit, stone.shade, pal.glass.shade, pal.outline);
   const wood = pal.m.doorWood;
   for (const [x, y] of [[0.27, 0.73], [0.73, 0.27]] as const) {
     const p = at(o, x, y, 0);
@@ -83,8 +107,8 @@ function well(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): v
 
 function crate(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
   const wood = pal.m.doorWood;
-  slab(ctx, o, 0.3, 0.3, 0.7, 0.7, 0, 4.5, wood.lit, wood.shade, wood.light);
-  slab(ctx, o, 0.4, 0.45, 0.62, 0.64, 4.5, 7.5, pal.m.wallSand.lit, pal.m.wallSand.shade, pal.m.wallSand.light);
+  slab(ctx, o, 0.3, 0.3, 0.7, 0.7, 0, 4.5, wood.lit, wood.shade, wood.light, pal.outline);
+  slab(ctx, o, 0.4, 0.45, 0.62, 0.64, 4.5, 7.5, pal.m.wallSand.lit, pal.m.wallSand.shade, pal.m.wallSand.light, pal.outline);
 }
 
 function haystack(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
@@ -111,8 +135,8 @@ function haystack(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette
 
 function hive(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
   const w = pal.m.wallWhite;
-  slab(ctx, o, 0.32, 0.32, 0.68, 0.68, 2, 6.5, w.lit, w.shade, w.light);
-  slab(ctx, o, 0.28, 0.28, 0.72, 0.72, 6.5, 8, pal.m.awnYellow.lit, pal.m.awnYellow.shade, pal.m.awnYellow.light);
+  slab(ctx, o, 0.32, 0.32, 0.68, 0.68, 2, 6.5, w.lit, w.shade, w.light, pal.outline);
+  slab(ctx, o, 0.28, 0.28, 0.72, 0.72, 6.5, 8, pal.m.awnYellow.lit, pal.m.awnYellow.shade, pal.m.awnYellow.light, pal.outline);
   const legs = at(o, 0.5, 0.7, 0);
   fillPixelRect(ctx, legs.sx - 3, legs.sy - 2, 2, 2, pal.m.doorWood.dark);
   fillPixelRect(ctx, legs.sx + 2, legs.sy - 2, 2, 2, pal.m.doorWood.dark);
@@ -196,28 +220,28 @@ function barrel(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette):
 function cart(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, alongX: boolean): void {
   const wood = pal.m.doorWood;
   shadow(ctx, o, 0.5, 0.5, 0.5, pal);
-  if (alongX) slab(ctx, o, 0.08, 0.3, 0.92, 0.7, 3, 7, wood.lit, wood.shade, wood.light);
-  else slab(ctx, o, 0.3, 0.08, 0.7, 0.92, 3, 7, wood.lit, wood.shade, wood.light);
+  if (alongX) slab(ctx, o, 0.08, 0.3, 0.92, 0.7, 3, 7, wood.lit, wood.shade, wood.light, pal.outline);
+  else slab(ctx, o, 0.3, 0.08, 0.7, 0.92, 3, 7, wood.lit, wood.shade, wood.light, pal.outline);
   // hay load and a wheel on the visible side
   const hay = pal.m.roofThatch;
-  if (alongX) slab(ctx, o, 0.15, 0.36, 0.85, 0.64, 7, 10, hay.lit, hay.shade, hay.light);
-  else slab(ctx, o, 0.36, 0.15, 0.64, 0.85, 7, 10, hay.lit, hay.shade, hay.light);
+  if (alongX) slab(ctx, o, 0.15, 0.36, 0.85, 0.64, 7, 10, hay.lit, hay.shade, hay.light, pal.outline);
+  else slab(ctx, o, 0.36, 0.15, 0.64, 0.85, 7, 10, hay.lit, hay.shade, hay.light, pal.outline);
   const w = alongX ? at(o, 0.5, 0.72, 3) : at(o, 0.72, 0.5, 3);
   pixelEllipseOutline(ctx, w.sx, w.sy, 4, 4, pal.woodDark);
 }
 
 function woodpile(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette): void {
   const wood = pal.m.doorWood;
-  slab(ctx, o, 0.22, 0.3, 0.78, 0.7, 0, 3, wood.lit, wood.shade, wood.light);
-  slab(ctx, o, 0.28, 0.34, 0.72, 0.66, 3, 5.6, wood.light, wood.lit, wood.light);
+  slab(ctx, o, 0.22, 0.3, 0.78, 0.7, 0, 3, wood.lit, wood.shade, wood.light, pal.outline);
+  slab(ctx, o, 0.28, 0.34, 0.72, 0.66, 3, 5.6, wood.light, wood.lit, wood.light, pal.outline);
   strokeLine(ctx, at(o, 0.3, 0.7, 1.5), at(o, 0.7, 0.7, 1.5), wood.dark, 0.6);
 }
 
 function trough(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, alongX: boolean): void {
   const wood = pal.m.doorWood;
   const water = pal.glass.lit;
-  if (alongX) slab(ctx, o, 0.15, 0.38, 0.85, 0.62, 0, 4, wood.lit, wood.shade, water);
-  else slab(ctx, o, 0.38, 0.15, 0.62, 0.85, 0, 4, wood.lit, wood.shade, water);
+  if (alongX) slab(ctx, o, 0.15, 0.38, 0.85, 0.62, 0, 4, wood.lit, wood.shade, water, pal.outline);
+  else slab(ctx, o, 0.38, 0.15, 0.62, 0.85, 0, 4, wood.lit, wood.shade, water, pal.outline);
 }
 
 function cow(ctx: CanvasRenderingContext2D, o: Origin, pal: BuildingPalette, v: number): void {

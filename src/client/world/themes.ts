@@ -79,6 +79,12 @@ export interface Theme {
   name: string;
   colors: Record<ColorName, string>;
   materials: Record<MaterialName, string>;
+  shadow: {
+    color: string;
+    opacity: number;
+    lengthScale: number;
+    edgeSteps: 1 | 2;
+  };
 }
 
 // `ThemeId` declares the identifiers reserved for the six planned themes.
@@ -97,18 +103,18 @@ const daytimeMeadow: Theme = {
   name: 'Daytime Meadow',
   colors: {
     // Scene
-    skyTop: '#c4e3f4',
-    skyMid: '#d9edf7',
-    skyLow: '#ebf5fa',
+    skyTop: '#8fc8ee',
+    skyMid: '#c8e7f4',
+    skyLow: '#dff0fb',
     cloud: '#ffffff',
     cloudShade: '#dcecf6',
     hillFar: '#94b963',
     hillNear: '#66a954',
-    grass: '#5a9d4c',
-    grassLight: '#9bd666',
-    grassDark: '#4b9147',
-    path: '#d8c69e',
-    pathEdge: '#b9ab95',
+    grass: '#6fae4a',
+    grassLight: '#97cb62',
+    grassDark: '#4a8a4a',
+    path: '#c8b98f',
+    pathEdge: '#a99f86',
     trunk: '#7a4f33',
     leaf: '#4f9145',
     leafLight: '#80c05a',
@@ -120,7 +126,7 @@ const daytimeMeadow: Theme = {
     wall: '#f4e7cc',
     wallShade: '#d2c5a8',
     glass: '#6fc0e2',
-    stone: '#9c95a1',
+    stone: '#a39e9a',
     flowerPink: '#f78fb3',
     flowerYellow: '#ffd23f',
     flowerWhite: '#ffffff',
@@ -137,26 +143,28 @@ const daytimeMeadow: Theme = {
     accentInk: '#ffffff',
     plank: '#f2cf8a',
     plankInk: '#2b2a33',
-    focus: '#14229c',
+    focus: '#10186f',
   },
   materials: {
-    wallCream: '#dcd1c0',
-    wallSand: '#cdb98f',
-    wallPlaster: '#e6dcc6',
+    wallCream: '#e6d9b8',
+    wallSand: '#cbb994',
+    wallPlaster: '#d0bf98',
     wallBrick: '#b4533a',
-    wallStone: '#bcb6c4',
-    wallWhite: '#f4e7cc',
+    wallStone: '#a39e9a',
+    wallWhite: '#f4ecd8',
     wallBlue: '#9fb0ba',
     wallTimber: '#5a4a40',
-    roofRed: '#c0613f',
+    // Terracotta roofs sit about 15% below the old flat saturation, so they stay
+    // warm without becoming the loudest thing in the scene.
+    roofRed: '#b66649',
     roofBrown: '#7a4f33',
-    roofSlate: '#414357',
+    roofSlate: '#4f5873',
     roofBlue: '#4d5666',
     roofGreen: '#4a7f6a',
     roofTeal: '#4a7f6a',
-    roofOrange: '#c8753f',
-    roofThatch: '#d8c69e',
-    roofDark: '#373a4b',
+    roofOrange: '#be7749',
+    roofThatch: '#b8964f',
+    roofDark: '#363d57',
     awnRed: '#b4533a',
     awnGreen: '#4a7f6a',
     awnBlue: '#4d5666',
@@ -164,6 +172,12 @@ const daytimeMeadow: Theme = {
     doorWood: '#7a4f33',
     iron: '#414357',
     gold: '#cdb98f',
+  },
+  shadow: {
+    color: '#3a3d6a',
+    opacity: 0.34,
+    lengthScale: 0.85,
+    edgeSteps: 2,
   },
 };
 

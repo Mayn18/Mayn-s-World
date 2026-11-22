@@ -42,6 +42,16 @@ export interface WallTile {
   along: 'x' | 'y';
 }
 
+// A shadow's span across one tile, in tile-local x. `head` is the caster side and
+// `tail` the far end, so the two stepped edges fade along the whole shadow rather
+// than at every tile boundary.
+interface ShadowSpan {
+  x0: number;
+  x1: number;
+  head: boolean;
+  tail: boolean;
+}
+
 export interface Scene {
   placements: Placement[];
   walls: WallTile[];
@@ -61,6 +71,25 @@ function peakHeight(app: Appearance): number {
 }
 
 const key = (x: number, y: number) => y * 1000 + x;
+
+// Merge overlapping spans inside one tile so a pixel is painted once. The head and
+// tail flags survive if any contributing caster has them, which keeps the soft
+// edges continuous without double-darkening the overlap.
+function mergeShadowSpans(spans: readonly ShadowSpan[]): ShadowSpan[] {
+  const sorted = [...spans].sort((a, b) => a.x0 - b.x0);
+  const merged: ShadowSpan[] = [];
+  for (const span of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && span.x0 <= last.x1 + 1e-6) {
+      last.x1 = Math.max(last.x1, span.x1);
+      last.head ||= span.head;
+      last.tail ||= span.tail;
+    } else {
+      merged.push({ ...span });
+    }
+  }
+  return merged;
+}
 
 // Tiles on the curtain wall's polylines (axis-aligned).
 export function wallTiles(runs: WallRun[]): WallTile[] {
@@ -106,27 +135,51 @@ export function buildScene(
   }
   for (const t of wallList) covered.add(key(t.x, t.y));
 
-  // Shadow rectangles by tile: [x0, y0, x1, y1] in tile-local units.
-  const shadows = new Map<number, [number, number, number, number][]>();
-  const castShadow = (x0: number, y0: number, w: number, d: number, height: number, level: number) => {
-    const length = Math.min(2.6, Math.max(0.7, height / 22));
-    const from = x0 + w;
-    const to = from + length;
-    for (let y = y0; y < y0 + d; y++) {
-      for (let x = Math.floor(from); x < Math.ceil(to); x++) {
-        if (x < 0 || y < 0 || x >= model.terrain.width || y >= model.terrain.height) continue;
-        if (levels[y]![x] !== level || model.terrain.water[y]![x] || covered.has(key(x, y))) continue;
-        const lx0 = Math.max(from, x) - x;
-        const lx1 = Math.min(to, x + 1) - x;
-        if (lx1 <= lx0) continue;
-        const list = shadows.get(key(x, y)) ?? [];
-        list.push([lx0, 0, lx1, 1]);
-        shadows.set(key(x, y), list);
+  // Shadow spans by tile. Built for one theme at a time: a theme switch rebuilds
+  // the cache, so only the current theme's small map is retained.
+  const casters: { x: number; y: number; w: number; d: number; height: number; level: number }[] = [];
+  for (const p of placements) {
+    casters.push({ x: p.building.x, y: p.building.y, w: p.building.w, d: p.building.d, height: p.height, level: p.origin.level });
+  }
+  for (const t of wallList) {
+    casters.push({ x: t.x, y: t.y, w: 1, d: 1, height: WALL_HEIGHT * 2.2, level: levels[t.y]![t.x]! });
+  }
+
+  const buildShadowMap = (theme: Theme) => {
+    const out = new Map<number, ShadowSpan[]>();
+    for (const caster of casters) {
+      const baseLength = Math.min(2.6, Math.max(0.7, caster.height / 22));
+      const length = baseLength * theme.shadow.lengthScale;
+      const { x: x0, y: y0, w, d, level } = caster;
+      const from = x0 + w;
+      const to = from + length;
+      const firstTile = Math.floor(from);
+      const lastTile = Math.ceil(to) - 1;
+      for (let y = y0; y < y0 + d; y++) {
+        for (let x = firstTile; x <= lastTile; x++) {
+          if (x < 0 || y < 0 || x >= model.terrain.width || y >= model.terrain.height) continue;
+          if (levels[y]![x] !== level || model.terrain.water[y]![x] || covered.has(key(x, y))) continue;
+          const lx0 = Math.max(from, x) - x;
+          const lx1 = Math.min(to, x + 1) - x;
+          if (lx1 <= lx0) continue;
+          const list = out.get(key(x, y)) ?? [];
+          list.push({ x0: lx0, x1: lx1, head: x === firstTile, tail: x === lastTile });
+          out.set(key(x, y), list);
+        }
       }
     }
+    return out;
   };
-  for (const p of placements) castShadow(p.building.x, p.building.y, p.building.w, p.building.d, p.height, p.origin.level);
-  for (const t of wallList) castShadow(t.x, t.y, 1, 1, WALL_HEIGHT * 2.2, levels[t.y]![t.x]!);
+
+  let shadowTheme: Theme | null = null;
+  let shadowMap: Map<number, ShadowSpan[]> | null = null;
+  const shadowsFor = (theme: Theme) => {
+    if (shadowTheme !== theme || !shadowMap) {
+      shadowTheme = theme;
+      shadowMap = buildShadowMap(theme);
+    }
+    return shadowMap;
+  };
 
   const anchors = new Map<number, Placement[]>();
   for (const p of placements) {
@@ -165,24 +218,49 @@ export function buildScene(
     paintTile(ctx, x, y, theme) {
       const pal = paletteFor(theme);
       decor?.paintGround(ctx, x, y, pal);
-      const rects = shadows.get(key(x, y));
-      if (rects) {
-        ctx.save();
-        ctx.globalAlpha = 0.2;
+      const spans = shadowsFor(theme).get(key(x, y));
+      if (spans) {
         const level = levels[y]![x]!;
-        for (const [a, b0, c, d] of rects) {
-          const p = (mx: number, my: number) => {
-            const s = mapToScreen(x + mx, y + my, model.surface[y]![x]!);
-            return s;
-          };
-          void level;
-          // Fill only (no outline): an outline would overlap its neighbour tile and
-          // double the shade along every tile edge.
-          ctx.fillStyle = pal.shadow;
+        const q = (mx: number) => mapToScreen(x + mx, y, level);
+        const fill = (a: number, c: number) => {
+          if (c <= a) return;
           ctx.beginPath();
-          [p(a, b0), p(c, b0), p(c, d), p(a, d)].forEach((q, i) => (i ? ctx.lineTo(q.sx, q.sy) : ctx.moveTo(q.sx, q.sy)));
+          [q(a), q(c), mapToScreen(x + c, y + 1, level), mapToScreen(x + a, y + 1, level)]
+            .forEach((point, i) => (i ? ctx.lineTo(point.sx, point.sy) : ctx.moveTo(point.sx, point.sy)));
           ctx.closePath();
           ctx.fill();
+        };
+        ctx.save();
+        ctx.fillStyle = theme.shadow.color;
+        for (const span of mergeShadowSpans(spans)) {
+          const length = span.x1 - span.x0;
+          if (theme.shadow.edgeSteps === 1) {
+            ctx.globalAlpha = theme.shadow.opacity;
+            fill(span.x0, span.x1);
+          } else if (span.head && span.tail) {
+            // A short shadow that starts and ends inside this tile: dark at the
+            // caster, lighter at the far end.
+            const middle = span.x0 + length * 0.5;
+            ctx.globalAlpha = theme.shadow.opacity;
+            fill(span.x0, middle);
+            ctx.globalAlpha = theme.shadow.opacity * 0.35;
+            fill(middle, span.x1);
+          } else if (span.head) {
+            const headEnd = span.x0 + length * 0.35;
+            ctx.globalAlpha = theme.shadow.opacity;
+            fill(span.x0, headEnd);
+            ctx.globalAlpha = theme.shadow.opacity * 0.65;
+            fill(headEnd, span.x1);
+          } else if (span.tail) {
+            const tailStart = span.x1 - length * 0.35;
+            ctx.globalAlpha = theme.shadow.opacity * 0.65;
+            fill(span.x0, tailStart);
+            ctx.globalAlpha = theme.shadow.opacity * 0.35;
+            fill(tailStart, span.x1);
+          } else {
+            ctx.globalAlpha = theme.shadow.opacity * 0.65;
+            fill(span.x0, span.x1);
+          }
         }
         ctx.restore();
       }

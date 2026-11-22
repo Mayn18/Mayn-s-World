@@ -16,7 +16,7 @@ import {
 import { mix } from '../render/terrainPalette';
 import { type Origin, at } from './geometry';
 import { hash2 } from './random';
-import type { BuildingPalette, Tone } from './palette';
+import { formTone, type BuildingPalette, type Tone } from './palette';
 import type { Appearance, Extra, Volume } from './style';
 
 const OVERHANG = 0.12; // tiles the roof reaches beyond the wall
@@ -153,20 +153,32 @@ function paintWalls(
 
   for (const face of ['south', 'east'] as const) {
     const lit = face === 'south';
+    const wallFaceTone = formTone(wall, lit ? 'left' : 'right');
     const lo = face === 'south' ? vol.x0 : vol.y0;
     const hi = face === 'south' ? vol.x1 : vol.y1;
     // The wall itself.
     const wallFace = wallQuad(o, vol, face, lo, hi, 0, H);
-    fillPolygon(ctx, wallFace, lit ? wall.lit : wall.shade);
+    fillPolygon(ctx, wallFace, wallFaceTone.lit);
     strokePixelPolygon(ctx, wallFace, wall.dark);
+    // Two stepped, 2-3 lp bands: one under the eave and one at the wall base.
+    // The darkest band sits immediately below the eave and the base band meets
+    // the ground, so the wall reads as grounded without a black outline.
+    fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, H - 4.0, H - 2.2),
+      lit ? wall.shade : wall.dark);
+    fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, H - 2.2, H - 1.0),
+      lit ? wall.shade : mix(wall.dark, pal.outline, 0.18));
+    fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, 0, 1.4),
+      lit ? wall.dark : mix(wall.dark, pal.outline, 0.22));
+    fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, 1.4, 2.8),
+      lit ? wall.shade : wall.dark);
     if (vol.wall === 'wallStone' || app.wall === 'wallStone' || vol.wall === 'wallBrick' || app.wall === 'wallBrick') {
       paintPixelCourses(ctx, wallFace, Math.max(2, Math.floor(H / 8)), Math.max(2, Math.floor((hi - lo) / 0.8)), {
         line: wall.shade,
         joint: wall.dark,
       });
     }
-    // A pale lip along the top and a shaded strip under the eaves give the wall depth.
-    fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, H - 2.2, H), lit ? wall.shade : wall.dark);
+    // A pale lip along the top stays above the darker stepped eave band.
+    fillPolygon(ctx, wallQuad(o, vol, face, lo, hi, H - 1.0, H), lit ? wall.light : wall.lit);
     // A ground floor of another material, with a beam or sill line where the floors above begin.
     const gwTop = pl + fpx;
     if (app.groundWall && vol.floors > 1) {
@@ -223,7 +235,9 @@ function paintWalls(
             }
           }
           fillPolygon(ctx, wallQuad(o, vol, face, u - WIN_HALF, u + WIN_HALF, z0, z1), lit ? timber.lit : timber.shade);
-          fillPolygon(ctx, wallQuad(o, vol, face, u - WIN_HALF + 0.03, u + WIN_HALF - 0.03, z0 + 0.7, z1 - 0.7), lit ? glass.lit : glass.shade);
+          // Dark 1 lp reveal inside the frame, with no soft blur or outline.
+          fillPolygon(ctx, wallQuad(o, vol, face, u - WIN_HALF + 0.03, u - WIN_HALF + 0.11, z0 + 0.7, z1 - 0.7), pal.outline);
+          fillPolygon(ctx, wallQuad(o, vol, face, u - WIN_HALF + 0.11, u + WIN_HALF - 0.11, z0 + 0.7, z1 - 0.7), lit ? glass.lit : glass.shade);
           // a thin sill
           fillPolygon(ctx, wallQuad(o, vol, face, u - WIN_HALF - 0.025, u + WIN_HALF + 0.025, z0 - 0.7, z0), lit ? wall.light : wall.lit);
         }
@@ -265,6 +279,7 @@ function paintDoor(
   const base = 0;
   // frame, then the leaf
   fillPolygon(ctx, wallQuad(o, vol, face, u - half - 0.035, u + half + 0.035, base, h + 1), lit ? trim.light : trim.lit);
+  fillPolygon(ctx, wallQuad(o, vol, face, u - half - 0.035, u - half + 0.04, base, h + 0.7), pal.outline);
   const leaf = app.door === 'gate' ? pal.m.iron : wood;
   fillPolygon(ctx, wallQuad(o, vol, face, u - half, u + half, base, h), lit ? leaf.lit : leaf.shade);
   if (app.door === 'double' || app.door === 'wide') {

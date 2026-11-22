@@ -60,6 +60,24 @@ function courses(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: numbe
   });
 }
 
+// A thin band across the two visible faces only. Using a box here would paint a
+// horizontal top plane inside the mass, which reads as a shelf rather than a shadow.
+function faceBand(
+  ctx: CanvasRenderingContext2D,
+  o: Origin,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  z0: number,
+  z1: number,
+  lit: string,
+  shade: string,
+): void {
+  fillPolygon(ctx, [at(o, x0, y1, z0), at(o, x1, y1, z0), at(o, x1, y1, z1), at(o, x0, y1, z1)], lit);
+  fillPolygon(ctx, [at(o, x1, y1, z0), at(o, x1, y0, z0), at(o, x1, y0, z1), at(o, x1, y1, z1)], shade);
+}
+
 // A stone block: battered foot, shaft with courses, a belt course and a corbelled top.
 function stoneMass(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: number, x1: number, y1: number, z0: number, z1: number, pal: BuildingPalette): void {
   const stone = pal.m.wallStone;
@@ -67,6 +85,8 @@ function stoneMass(ctx: CanvasRenderingContext2D, o: Origin, x0: number, y0: num
   box(ctx, o, x0 - foot, y0 - foot, x1 + foot, y1 + foot, z0, z0 + 5, stone, stone.light);
   box(ctx, o, x0, y0, x1, y1, z0 + 5, z1, stone, stone.lit);
   courses(ctx, o, x0, y0, x1, y1, z0 + 5, z1, stone);
+  faceBand(ctx, o, x0, y0, x1, y1, z0, z0 + 2.4, stone.dark, mix(stone.dark, pal.outline, 0.2));
+  faceBand(ctx, o, x0, y0, x1, y1, z1 - 3.2, z1 - 1.2, stone.shade, stone.dark);
 }
 
 // A flame on a bracket: a torch beside a gate or door.

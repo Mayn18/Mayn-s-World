@@ -85,10 +85,12 @@ export function terrainPalette(theme: Theme): TerrainPalette {
   // from colour alone, not only from the cliff faces.
   // Lowland is a deeper, lusher green; the highest ground is paler and drier.
   const lowest = mix(c.grassDark, c.leafDark, 0.3);
-  const highest = mix(c.grassLight, c.wall, 0.35);
+  const highest = mix(c.grassLight, c.wall, 0.28);
   const top = Array.from({ length: LEVEL_COUNT }, (_, level) => {
     const ground = mix(lowest, highest, Math.min(level, BASE_LEVELS - 1) / (BASE_LEVELS - 1));
-    return level < BASE_LEVELS ? ground : mix(ground, c.wall, 0.1 * (level - BASE_LEVELS + 1));
+    // Above the meadow's own levels is the castle hill. Its lawn is cooled and
+    // darkened by about 10-15% so the pale stone castle reads against it.
+    return level < BASE_LEVELS ? ground : mix(ground, c.outline, 0.2 + 0.05 * (level - BASE_LEVELS));
   });
 
   // Pale at the shore, deeper towards the middle of the river.
@@ -98,12 +100,12 @@ export function terrainPalette(theme: Theme): TerrainPalette {
     mix(shallow, deep, i / (WATER_STEPS - 1)),
   );
 
-  const castleBase = mix(c.stone, c.wall, 0.4);
+  const castleBase = mix(mix(c.stone, c.outline, 0.12), c.wall, 0.28);
 
   // Paving runs from pale stone (the square) to packed earth (tracks), all in the
   // warm family of the theme's path colours so it reads as one restrained set.
-  const main = mix(c.path, c.wall, 0.5);
-  const lane = mix(c.path, c.pathEdge, 0.4);
+  const main = mix(c.path, c.pathEdge, 0.25);
+  const lane = mix(main, c.pathEdge, 0.18);
   const path = mix(c.pathEdge, c.wood, 0.25);
   const track = mix(path, c.woodDark, 0.2);
   const kerb = mix(c.pathEdge, c.outline, 0.25);
@@ -141,8 +143,10 @@ export function terrainPalette(theme: Theme): TerrainPalette {
     },
     roads: {
       surface: {
-        plaza: mix(c.wall, c.cloud, 0.2),
-        plazaEdge: mix(mix(c.wall, c.cloud, 0.2), lane, 0.16),
+        // A warm pale stone, a step below plaster and more neutral, so the square
+        // reads as paving rather than a hole in the picture.
+        plaza: mix(c.path, c.cloud, 0.1),
+        plazaEdge: mix(mix(c.path, c.cloud, 0.1), lane, 0.16),
         main,
         lane,
         path,

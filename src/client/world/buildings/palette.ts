@@ -21,8 +21,10 @@ export interface BuildingPalette {
   glass: Tone;
   outline: string;
   white: string;
-  // Colour of ground shadows (drawn semi-transparent).
+  // Colour and parameters of baked ground shadows (drawn semi-transparent).
   shadow: string;
+  shadowOpacity: number;
+  shadowEdgeSteps: 1 | 2;
   flowers: readonly string[];
   leaf: string;
   leafLight: string;
@@ -31,6 +33,37 @@ export interface BuildingPalette {
   grassDark: string;
   wood: string;
   woodDark: string;
+}
+
+export type FormFace = 'top' | 'left' | 'right';
+
+// One reusable, theme-neutral form-lighting rule. The theme supplies the material
+// base and neutral ink/highlight colours; the face rule is fixed for every theme:
+// top = highlight to light, left = light to base, right = shade. `exposure` lets a
+// later theme soften the key light without flipping which face is brighter.
+export function formTone(base: Tone, face: FormFace, exposure = 1): Tone {
+  const e = Math.max(0, Math.min(1, exposure));
+  // Exposure compresses the ramp towards its middle at 0 and gives the full
+  // authored spread at 1, so a diffuse theme can soften the key without flipping it.
+  const mid = mix(base.lit, base.shade, 0.5);
+  const t = 0.5 + 0.5 * e;
+  if (face === 'top') {
+    return { lit: mix(mid, base.light, t), shade: mix(mid, base.lit, t), dark: base.dark, light: base.light };
+  }
+  if (face === 'left') {
+    return { lit: mix(mid, base.lit, t), shade: mix(mid, base.shade, t), dark: base.dark, light: base.light };
+  }
+  return { lit: mix(mid, base.shade, t), shade: mix(mid, base.dark, t), dark: base.dark, light: base.light };
+}
+
+// Curved forms (tower drums, domes, canopies): three soft bands from the lit
+// left side to the shaded right side. The middle band is a mix, never a new colour.
+export function curvedTone(base: Tone): readonly [string, string, string] {
+  return [
+    base.light,
+    mix(base.light, base.shade, 0.35),
+    base.shade,
+  ];
 }
 
 function tone(base: string, ink: string, white: string): Tone {
@@ -57,7 +90,9 @@ export function buildingPalette(theme: Theme): BuildingPalette {
     },
     outline: c.outline,
     white: c.flowerWhite,
-    shadow: c.outline,
+    shadow: theme.shadow.color,
+    shadowOpacity: theme.shadow.opacity,
+    shadowEdgeSteps: theme.shadow.edgeSteps,
     flowers: [c.flowerPink, c.flowerYellow, c.flowerWhite],
     leaf: c.leaf,
     leafLight: c.leafLight,

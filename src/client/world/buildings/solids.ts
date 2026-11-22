@@ -14,6 +14,7 @@ import {
 } from '../render/pixelArt';
 import { type Origin, at } from './geometry';
 import type { Tone } from './palette';
+import { curvedTone } from './palette';
 
 const SQRT2 = Math.SQRT2;
 
@@ -58,13 +59,17 @@ export function cylinder(
     ...ellipsePoints(top.sx, top.sy, rx, ry, Math.PI, 0),
   ];
   ctx.save();
-  fillPixelPolygon(ctx, side, tone.lit);
+  const [lit, mid, shade] = curvedTone(tone);
+  fillPixelPolygon(ctx, side, lit);
   strokePixelPolygon(ctx, side, tone.dark);
   ctx.beginPath();
   side.forEach(({ sx, sy }, index) => (index ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)));
   ctx.closePath();
   ctx.clip();
-  fillPixelRect(ctx, base.sx + rx * SHADE_FROM, top.sy - ry, rx * 2, base.sy - top.sy + ry * 2, tone.shade);
+  fillPixelRect(ctx, base.sx + rx * SHADE_FROM, top.sy - ry, rx * 2, base.sy - top.sy + ry * 2, shade);
+  fillPixelRect(ctx, base.sx + rx * (SHADE_FROM - 0.18), top.sy - ry, rx * 0.36, base.sy - top.sy + ry * 2, mid);
+  // A clipped contact band at the foot, not an unclipped bar on the ground.
+  fillPixelRect(ctx, base.sx - rx, base.sy - 2.4, rx * 2, 2.4, shade);
   ctx.restore();
   const cap = ellipsePoints(top.sx, top.sy, rx, ry, 0, Math.PI * 2);
   fillPixelPolygon(ctx, cap, tone.light);
