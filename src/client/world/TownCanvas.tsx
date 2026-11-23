@@ -50,7 +50,7 @@ import { actorsVisible } from './ambient/ambientLod';
 import { paintAmbientBase } from './ambient/ambientPainter';
 import { buildWaterEffectScene } from './ambient/waterEffects';
 import { buildingPalette } from './buildings/palette';
-import { setWorldTransform } from './render/worldTransform';
+import { setPictureTransform, setWorldTransform } from './render/worldTransform';
 
 interface TownCanvasProps {
   theme?: Theme;
@@ -636,7 +636,7 @@ export function TownCanvas({
     }
 
     const maxResolution = cacheResolution(bounds, fit.scale * MAX_ZOOM, dpr);
-    setWorldTransform(ctx, view, dpr, bounds);
+    setPictureTransform(ctx, view, dpr);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
       terrainCanvas.canvas,

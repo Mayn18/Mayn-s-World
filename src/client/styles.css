@@ -395,7 +395,7 @@ html[data-page-hidden] .ambient-sway {
 
 .world-theme-options {
   margin-top: 12px;
-  max-height: calc(100dvh - 92px);
+  max-height: calc(100dvh - 110px);
   overflow-y: auto;
   padding: 8px;
 }
@@ -437,10 +437,21 @@ html[data-page-hidden] .ambient-sway {
 }
 
 @media (max-width: 520px) {
+  .world-viewport {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px;
+    box-sizing: border-box;
+  }
+
   .world-motion-control {
-    top: 12px;
-    right: 12px;
-    left: 12px;
+    position: relative;
+    order: 1;
+    top: auto;
+    right: auto;
+    left: auto;
     max-width: none;
   }
 
@@ -448,14 +459,21 @@ html[data-page-hidden] .ambient-sway {
     min-height: 48px;
   }
 
+  .world-motion-control > span {
+    flex: 1 1 100%;
+  }
+
   .world-theme-selector {
-    top: 100px;
-    right: 12px;
-    left: 12px;
+    position: relative;
+    order: 2;
+    top: auto;
+    right: auto;
+    left: auto;
     width: auto;
   }
 
   .world-theme-options {
-    max-height: calc(100dvh - 160px);
+    max-height: max(72px, calc(100dvh - 200px));
+    overscroll-behavior: contain;
   }
 }

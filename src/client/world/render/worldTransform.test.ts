@@ -1,27 +1,71 @@
-import { describe, expect, it, vi } from 'vitest';
-import { fitContain, initialCamera, panCameraBy, cameraView } from './viewTransform';
-import { setWorldTransform } from './worldTransform';
+import { describe, expect, it } from 'vitest';
+import { townModel } from '../terrain/town';
+import { pickTile } from './picking';
+import { tileCenter } from './projection';
+import { worldBounds } from './bounds';
+import { cameraView, fitContain, initialCamera, panCameraBy } from './viewTransform';
+import { setPictureTransform, setWorldTransform } from './worldTransform';
 
-describe('world layer transform', () => {
-  it('keeps the animation overlay aligned with the cached world while panning and zooming', () => {
-    for (const [width, height] of [[390, 844], [844, 390], [820, 1180], [1440, 900]] as const) {
-      const fit = fitContain(width, height, 2240, 1200);
-      let camera = { ...initialCamera(2240, 1200), zoom: 2.4 };
-      camera = panCameraBy(camera, fit, 47, -23);
+function transformContext() {
+  let matrix = [1, 0, 0, 1, 0, 0];
+  return {
+    setTransform(a: number, b: number, c: number, d: number, e: number, f: number) {
+      matrix = [a, b, c, d, e, f];
+    },
+    translate(x: number, y: number) {
+      const [a, b, c, d, e, f] = matrix;
+      matrix = [a, b, c, d, e + a * x + c * y, f + b * x + d * y];
+    },
+    point(x: number, y: number) {
+      const [a, b, c, d, e, f] = matrix;
+      return { x: a * x + c * y + e, y: b * x + d * y + f };
+    },
+  };
+}
+
+describe('world layer transforms', () => {
+  it('aligns a known cached tile, ambient point, and pointer hit after camera and DPR transforms', () => {
+    const bounds = worldBounds(townModel);
+    const tile = { x: 79, y: 59 };
+    const worldPoint = tileCenter(tile, townModel.surface[tile.y]![tile.x]!);
+    const picturePoint = { x: worldPoint.sx - bounds.left, y: worldPoint.sy - bounds.top };
+
+    for (const [width, height, dpr] of [[1440, 900, 2], [844, 390, 1]] as const) {
+      const fit = fitContain(width, height, bounds.width, bounds.height);
+      const camera = panCameraBy(
+        { ...initialCamera(bounds.width, bounds.height), zoom: 1.2 },
+        fit,
+        2,
+        -2,
+      );
       const view = cameraView(fit, width, height, camera);
-      const makeContext = () => ({
-        setTransform: vi.fn(),
-        translate: vi.fn(),
-      });
-      const cachedWorld = makeContext();
-      const overlay = makeContext();
-      const bounds = { left: -48, top: -91 };
+      const cachedWorld = transformContext();
+      const overlay = transformContext();
 
-      setWorldTransform(cachedWorld, view, 2, bounds);
-      setWorldTransform(overlay, view, 2, bounds);
+      setPictureTransform(cachedWorld, view, dpr);
+      setWorldTransform(overlay, view, dpr, bounds);
 
-      expect(overlay.setTransform.mock.calls).toEqual(cachedWorld.setTransform.mock.calls);
-      expect(overlay.translate.mock.calls).toEqual(cachedWorld.translate.mock.calls);
+      const expected = {
+        x: picturePoint.x * view.scale + view.offsetX,
+        y: picturePoint.y * view.scale + view.offsetY,
+      };
+      const cachedScreen = cachedWorld.point(picturePoint.x, picturePoint.y);
+      const overlayScreen = overlay.point(worldPoint.sx, worldPoint.sy);
+      expect(cachedScreen.x / dpr).toBeCloseTo(expected.x, 8);
+      expect(cachedScreen.y / dpr).toBeCloseTo(expected.y, 8);
+      expect(overlayScreen.x / dpr).toBeCloseTo(expected.x, 8);
+      expect(overlayScreen.y / dpr).toBeCloseTo(expected.y, 8);
+
+      const pictureUnderPointer = {
+        x: (expected.x - view.offsetX) / view.scale,
+        y: (expected.y - view.offsetY) / view.scale,
+      };
+      const picked = pickTile(
+        townModel,
+        pictureUnderPointer.x + bounds.left,
+        pictureUnderPointer.y + bounds.top,
+      );
+      expect(picked).toMatchObject(tile);
     }
   });
 });
