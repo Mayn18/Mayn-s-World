@@ -338,7 +338,7 @@ Sequence on a theme change (the existing theme-keyed invalidation, made explicit
 - **Render on demand** (already true: `scheduleDraw` on wheel, pan and resize). A frame is also requested when a cache rebuild or upgrade finishes, or when an animation is active.
 - One `AnimationPolicy`: `motionAllowed = !prefers-reduced-motion && userToggle`, `visible = !document.hidden`. **A1 adds `visibilitychange` handling to the canvas loop (it does not exist today).** When not visible, stop requesting frames. When not `motionAllowed`, draw decorative effects as **one static frame per camera change**.
 - Ambient animation runs at up to 30 fps. Camera movement always renders at full rate.
-- **Zoom LOD:** below a zoom threshold, skip actors, smoke and fireflies, and reduce weather density.
+- **Zoom LOD:** use camera zoom relative to the initial fit to skip actors, cap fireflies and reduce weather density. Smoke remains visible at every zoom, with matching static and animated puff size and opacity.
 - Pooled particle arrays, no per-frame allocation, a per-frame dynamic budget of about 4 ms.
 - With the overlay canvas, **ambient frames never rebuild or redraw the cache canvas**: clear and draw the overlay only.
 

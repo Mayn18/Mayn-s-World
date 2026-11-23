@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AmbientScheduler, type SchedulerEnvironment } from './animationScheduler';
 
-function fakeEnvironment() {
+function fakeEnvironment(timestampOffset = 0) {
   let now = 0;
   let nextId = 1;
   const timeouts = new Map<number, { callback: () => void; due: number }>();
@@ -23,7 +23,7 @@ function fakeEnvironment() {
     clearTimeout(id) {
       timeouts.delete(id);
     },
-    now: () => now,
+    now: () => now + timestampOffset,
   };
   return {
     environment,
@@ -39,22 +39,59 @@ function fakeEnvironment() {
         callback(now);
       }
     },
+    advanceTo(time: number) {
+      now = time;
+      for (const [id, timer] of [...timeouts]) {
+        if (timer.due > now) continue;
+        timeouts.delete(id);
+        timer.callback();
+      }
+      for (const [id, callback] of [...frames]) {
+        frames.delete(id);
+        callback(now);
+      }
+    },
     pending: () => timeouts.size + frames.size,
   };
 }
 
 describe('AmbientScheduler', () => {
-  it('renders on demand at no more than 30 frames per second', () => {
-    const fake = fakeEnvironment();
+  it('keeps scheduled frames at or below 30 FPS with irregular frame times and clock skew', () => {
+    const fake = fakeEnvironment(2);
     const renders: [number, boolean][] = [];
     const scheduler = new AmbientScheduler((time, animated) => renders.push([time, animated]), fake.environment);
 
     scheduler.setPolicy({ enabled: true, reducedMotion: false, pageVisible: true });
-    expect(renders).toEqual([[0, true]]);
+    expect(renders).toEqual([[2, true]]);
+    for (const time of [16, 33, 50, 66, 83, 100, 116, 133, 150, 166, 183, 200]) {
+      fake.advanceTo(time);
+    }
+    const interval = 1000 / 30;
+    for (let index = 1; index < renders.length; index++) {
+      expect(renders[index]![0] - renders[index - 1]![0]).toBeGreaterThanOrEqual(interval);
+    }
+    expect(renders.length).toBeGreaterThan(3);
+    scheduler.dispose();
+    expect(fake.pending()).toBe(0);
+  });
+
+  it('renders camera changes immediately without leaving an early scheduled frame', () => {
+    const fake = fakeEnvironment();
+    const renders: number[] = [];
+    const scheduler = new AmbientScheduler((time) => renders.push(time), fake.environment);
+    const policy = { enabled: true, reducedMotion: false, pageVisible: true };
+
+    scheduler.setPolicy(policy);
+    scheduler.setPolicy(policy);
+    fake.advance(8);
+    scheduler.renderCurrent();
+    expect(renders).toEqual([0, 8]);
+    expect(fake.pending()).toBe(1);
+
     fake.advance(16);
-    expect(renders).toHaveLength(1);
+    expect(renders).toHaveLength(2);
     fake.advance(18);
-    expect(renders).toEqual([[0, true], [34, true]]);
+    expect(renders).toHaveLength(3);
     scheduler.dispose();
     expect(fake.pending()).toBe(0);
   });

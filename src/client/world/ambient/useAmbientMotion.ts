@@ -16,15 +16,32 @@ const STORAGE_KEY = 'mayns-world:ambient-motion';
 
 export type MotionSetting = 'on' | 'off';
 
-function deviceRequestsReducedMotion(): boolean {
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+type MotionStorage = Pick<Storage, 'getItem' | 'setItem'>;
+interface MotionMediaQuery {
+  readonly matches: boolean;
+  addEventListener(type: 'change', listener: () => void): void;
+  removeEventListener(type: 'change', listener: () => void): void;
+}
+interface VisibilityDocument {
+  readonly hidden: boolean;
+  addEventListener(type: 'visibilitychange', listener: () => void): void;
+  removeEventListener(type: 'visibilitychange', listener: () => void): void;
+}
+interface VisibilityElement {
+  toggleAttribute(name: string, force?: boolean): boolean;
 }
 
-// localStorage can throw (private browsing, blocked site data) or come back
-// empty, so every access is wrapped and the page works without it.
-function loadSetting(): MotionSetting {
+function localStorageOrNull(): MotionStorage | null {
   try {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function loadMotionSetting(storage: MotionStorage | null = localStorageOrNull()): MotionSetting {
+  try {
+    const saved = storage?.getItem(STORAGE_KEY);
     if (saved === 'on' || saved === 'off') return saved;
   } catch {
     // Storage unavailable: fall through to the default.
@@ -32,16 +49,52 @@ function loadSetting(): MotionSetting {
   return 'on';
 }
 
-function saveSetting(setting: MotionSetting): void {
+export function saveMotionSetting(
+  setting: MotionSetting,
+  storage: MotionStorage | null = localStorageOrNull(),
+): void {
   try {
-    window.localStorage.setItem(STORAGE_KEY, setting);
+    storage?.setItem(STORAGE_KEY, setting);
   } catch {
     // Not saved, but the setting still applies for this visit.
   }
 }
 
+export function nextMotionSetting(setting: MotionSetting, locked: boolean): MotionSetting {
+  return locked ? setting : setting === 'on' ? 'off' : 'on';
+}
+
+export function prefersReducedMotion(media?: Pick<MediaQueryList, 'matches'> | null): boolean {
+  return media?.matches ?? false;
+}
+
+export function watchReducedMotion(
+  media: MotionMediaQuery,
+  onChange: (reduced: boolean) => void,
+): () => void {
+  const update = () => onChange(media.matches);
+  media.addEventListener('change', update);
+  return () => media.removeEventListener('change', update);
+}
+
+export function watchPageVisibility(page: VisibilityDocument, element: VisibilityElement): () => void {
+  const update = () => {
+    element.toggleAttribute('data-page-hidden', page.hidden);
+  };
+  update();
+  page.addEventListener('visibilitychange', update);
+  return () => page.removeEventListener('visibilitychange', update);
+}
+
+function deviceRequestsReducedMotion(): boolean {
+  const media = typeof window === 'undefined'
+    ? null
+    : window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  return prefersReducedMotion(media);
+}
+
 export function useAmbientMotion() {
-  const [setting, setSetting] = useState<MotionSetting>(loadSetting);
+  const [setting, setSetting] = useState<MotionSetting>(loadMotionSetting);
   const [lockedByDevice, setLockedByDevice] = useState<boolean>(deviceRequestsReducedMotion);
   const motion: MotionSetting = lockedByDevice ? 'off' : setting;
 
@@ -52,26 +105,19 @@ export function useAmbientMotion() {
   useEffect(() => {
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     if (!media) return;
-    const update = () => setLockedByDevice(media.matches);
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
+    return watchReducedMotion(media, setLockedByDevice);
   }, []);
 
   // Pause animations while the tab is in the background; nobody is watching.
   useEffect(() => {
-    const update = () => {
-      document.documentElement.toggleAttribute('data-page-hidden', document.hidden);
-    };
-    update();
-    document.addEventListener('visibilitychange', update);
-    return () => document.removeEventListener('visibilitychange', update);
+    return watchPageVisibility(document, document.documentElement);
   }, []);
 
   const toggle = useCallback(() => {
     if (lockedByDevice) return;
-    const next: MotionSetting = setting === 'on' ? 'off' : 'on';
+    const next = nextMotionSetting(setting, lockedByDevice);
     setSetting(next);
-    saveSetting(next);
+    saveMotionSetting(next);
   }, [lockedByDevice, setting]);
 
   return { motion, toggle, lockedByDevice };

@@ -5,6 +5,7 @@ import type { TerrainModel } from '../terrain/model';
 import type { Theme } from '../themes';
 import { faceCorners, type Side } from '../render/faceGeometry';
 import { mapToScreen, tileCorners } from '../render/projection';
+import { waterTileEffectVisible } from './ambientLod';
 
 export interface WaterTileEffect {
   x: number;
@@ -45,6 +46,21 @@ const WATER_SIDES: { side: WaterSide; dx: number; dy: number }[] = [
   { side: 'west', dx: -1, dy: 0 },
 ] as const;
 
+interface WaterEffectContext {
+  save(): void;
+  restore(): void;
+  beginPath(): void;
+  moveTo(x: number, y: number): void;
+  lineTo(x: number, y: number): void;
+  closePath(): void;
+  clip(): void;
+  stroke(): void;
+  ellipse(x: number, y: number, radiusX: number, radiusY: number, rotation: number, startAngle: number, endAngle: number): void;
+  globalAlpha: number;
+  strokeStyle: string | CanvasGradient | CanvasPattern;
+  lineWidth: number;
+}
+
 export function buildWaterEffectScene(model: TerrainModel, roads: RoadLayer): WaterEffectScene {
   const tiles: WaterTileEffect[] = [];
   const waterfalls: WaterfallEffect[] = [];
@@ -53,14 +69,18 @@ export function buildWaterEffectScene(model: TerrainModel, roads: RoadLayer): Wa
   for (const { x, y } of model.order) {
     if (model.terrain.water[y]![x]) {
       if (roads.decks[y]![x]) continue;
-      tiles.push({
-        x,
-        y,
-        level: model.surface[y]![x]!,
-        shimmer: hash2(x, y, 910) < 0.28,
-        ripple: hash2(x, y, 911) < 0.08,
-        phase: hash2(x, y, 912) * Math.PI * 2,
-      });
+      const shimmer = hash2(x, y, 910) < 0.28;
+      const ripple = hash2(x, y, 911) < 0.08;
+      if (shimmer || ripple) {
+        tiles.push({
+          x,
+          y,
+          level: model.surface[y]![x]!,
+          shimmer,
+          ripple,
+          phase: hash2(x, y, 912) * Math.PI * 2,
+        });
+      }
 
       for (const neighbor of WATER_SIDES) {
         if (!roads.decks[y + neighbor.dy]?.[x + neighbor.dx]) continue;
@@ -79,7 +99,7 @@ export function buildWaterEffectScene(model: TerrainModel, roads: RoadLayer): Wa
   return { tiles, waterfalls, bridgeFoam };
 }
 
-function clipTile(ctx: CanvasRenderingContext2D, x: number, y: number, level: number): void {
+function clipTile(ctx: WaterEffectContext, x: number, y: number, level: number): void {
   ctx.beginPath();
   for (const [index, corner] of tileCorners(x, y, level).entries()) {
     if (index === 0) ctx.moveTo(corner.sx, corner.sy);
@@ -90,7 +110,7 @@ function clipTile(ctx: CanvasRenderingContext2D, x: number, y: number, level: nu
 }
 
 function paintWaterTileEffects(
-  ctx: CanvasRenderingContext2D,
+  ctx: WaterEffectContext,
   effect: WaterTileEffect,
   theme: Theme,
   time: number,
@@ -124,7 +144,7 @@ function paintWaterTileEffects(
 }
 
 function paintWaterfall(
-  ctx: CanvasRenderingContext2D,
+  ctx: WaterEffectContext,
   effect: WaterfallEffect,
   theme: Theme,
   time: number,
@@ -170,7 +190,7 @@ function paintWaterfall(
 }
 
 function paintBridgeFoam(
-  ctx: CanvasRenderingContext2D,
+  ctx: WaterEffectContext,
   effect: BridgeFoamEffect,
   model: TerrainModel,
   theme: Theme,
@@ -204,14 +224,19 @@ function paintBridgeFoam(
 }
 
 export function paintWaterEffects(
-  ctx: CanvasRenderingContext2D,
+  ctx: WaterEffectContext,
   scene: WaterEffectScene,
   model: TerrainModel,
   theme: Theme,
   time: number,
   animated: boolean,
+  cameraZoom: number,
 ): void {
-  for (const tile of scene.tiles) paintWaterTileEffects(ctx, tile, theme, time, animated);
+  for (const tile of scene.tiles) {
+    if (waterTileEffectVisible(tile.x, tile.y, cameraZoom)) {
+      paintWaterTileEffects(ctx, tile, theme, time, animated);
+    }
+  }
   for (const fall of scene.waterfalls) paintWaterfall(ctx, fall, theme, time, animated);
   if (!theme.water.frozen) {
     for (const foam of scene.bridgeFoam) paintBridgeFoam(ctx, foam, model, theme, time, animated);

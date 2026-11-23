@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { themes } from '../themes';
 import {
+  occluderPaintsAfterActor,
   paintFireflies,
   paintNightLights,
+  paintSmoke,
   paintWeather,
 } from './ambientPainter';
 import type { AmbientScene } from './ambientScene';
+import { buildingPalette } from '../buildings/palette';
+import { townBuildings } from '../data/loader';
 
 function createContext() {
   const calls = {
@@ -52,6 +56,84 @@ const ambient = {
 } satisfies Pick<AmbientScene, 'fireflies' | 'windows' | 'lamps' | 'particleSeeds'>;
 
 describe('ambient painter theme effects', () => {
+  it('keeps animated smoke aligned in size and opacity with its static fallback', () => {
+    const makeSmokeContext = () => {
+      const alphas: number[] = [];
+      let globalAlpha = 1;
+      const context = {
+        save: vi.fn(),
+        restore: vi.fn(),
+        beginPath: vi.fn(),
+        arc: vi.fn<(x: number, y: number, radius: number, start: number, end: number) => void>(),
+        fill: vi.fn(),
+        fillStyle: '',
+        get globalAlpha() {
+          return globalAlpha;
+        },
+        set globalAlpha(value: number) {
+          globalAlpha = value;
+          alphas.push(value);
+        },
+      };
+      return { context, alphas };
+    };
+    const anchor = { sx: 20, sy: 40, seed: 1, phase: 0.4 };
+    const staticFrame = makeSmokeContext();
+    const animatedFrame = makeSmokeContext();
+
+    paintSmoke(staticFrame.context, anchor, buildingPalette(themes['daytime-meadow']), 0, false);
+    paintSmoke(animatedFrame.context, anchor, buildingPalette(themes['daytime-meadow']), 700, true);
+
+    expect(staticFrame.context.arc.mock.calls.map(([, , radius]) => radius))
+      .toEqual(animatedFrame.context.arc.mock.calls.map(([, , radius]) => radius));
+    expect(animatedFrame.alphas).toHaveLength(staticFrame.alphas.length);
+    animatedFrame.alphas.forEach((alpha, index) => {
+      expect(alpha).toBeGreaterThan(staticFrame.alphas[index]! * 0.79);
+      expect(alpha).toBeLessThan(staticFrame.alphas[index]! * 1.21);
+    });
+    expect(animatedFrame.context.arc).toHaveBeenCalledTimes(3);
+  });
+
+  it('resolves equal-depth occlusion by the painter tie-break and preserves nearby depth order', () => {
+    const anchorForBuilding = (id: number) => {
+      const building = townBuildings.find(({ id: buildingId }) => buildingId === id)!;
+      return { x: building.x + building.w - 1, y: building.y + building.d - 1 };
+    };
+    const storeAnchor = anchorForBuilding(62);
+    const tavernAnchor = anchorForBuilding(63);
+
+    expect(occluderPaintsAfterActor(
+      storeAnchor.x,
+      storeAnchor.y,
+      storeAnchor.x - 0.5,
+      storeAnchor.y + 0.5,
+    )).toBe(true);
+    expect(occluderPaintsAfterActor(
+      storeAnchor.x,
+      storeAnchor.y,
+      storeAnchor.x + 0.5,
+      storeAnchor.y - 0.5,
+    )).toBe(false);
+    expect(occluderPaintsAfterActor(
+      tavernAnchor.x,
+      tavernAnchor.y,
+      tavernAnchor.x - 0.5,
+      tavernAnchor.y + 0.5,
+    )).toBe(true);
+    expect(occluderPaintsAfterActor(
+      storeAnchor.x,
+      storeAnchor.y + 1,
+      storeAnchor.x - 0.5,
+      storeAnchor.y + 0.5,
+    )).toBe(true);
+    expect(occluderPaintsAfterActor(
+      storeAnchor.x,
+      storeAnchor.y - 1,
+      storeAnchor.x - 0.5,
+      storeAnchor.y + 0.5,
+    )).toBe(false);
+  });
+
   it('only paints fireflies in Enchanted Forest and scales their count with zoom', () => {
     const { context, calls } = createContext();
     paintFireflies(context, ambient, themes['daytime-meadow'], 1000, true, 2);

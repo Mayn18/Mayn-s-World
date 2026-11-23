@@ -45,10 +45,12 @@ import {
 } from './activeTheme';
 import { AmbientScheduler } from './ambient/animationScheduler';
 import type { MotionSetting } from './ambient/useAmbientMotion';
-import { buildAmbientScene } from './ambient/ambientScene';
+import { buildAmbientScene, staticCachePaintOptions } from './ambient/ambientScene';
+import { actorsVisible } from './ambient/ambientLod';
 import { paintAmbientBase } from './ambient/ambientPainter';
 import { buildWaterEffectScene } from './ambient/waterEffects';
 import { buildingPalette } from './buildings/palette';
+import { setWorldTransform } from './render/worldTransform';
 
 interface TownCanvasProps {
   theme?: Theme;
@@ -290,11 +292,7 @@ export function TownCanvas({
     [scene],
   );
   const cachePaintOptions = useMemo(
-    () => ({
-      animatedStatic: false,
-      movingFigureTiles: ambientScene.movingFigureTiles,
-      movingAnimalPropIds: ambientScene.movingAnimalPropIds,
-    }),
+    () => staticCachePaintOptions(ambientScene),
     [ambientScene],
   );
   const waterEffects = useMemo(() => buildWaterEffectScene(townModel, townRoadLayer), []);
@@ -325,15 +323,15 @@ export function TownCanvas({
 
       const view = viewRef.current;
       if (view.scale <= 0) return;
-      const scale = view.scale * dpr;
-      ctx.setTransform(scale, 0, 0, scale, view.offsetX * dpr, view.offsetY * dpr);
-      ctx.translate(-bounds.left, -bounds.top);
+      setWorldTransform(ctx, view, dpr, bounds);
       ctx.imageSmoothingEnabled = false;
-      while (actorBuffersRef.current.length < ambientScene.walkers.length + ambientScene.animals.length) {
-        const buffer = document.createElement('canvas');
-        buffer.width = 64;
-        buffer.height = 64;
-        actorBuffersRef.current.push(buffer);
+      if (actorsVisible(cameraRef.current.zoom)) {
+        while (actorBuffersRef.current.length < ambientScene.walkers.length + ambientScene.animals.length) {
+          const buffer = document.createElement('canvas');
+          buffer.width = 64;
+          buffer.height = 64;
+          actorBuffersRef.current.push(buffer);
+        }
       }
       paintAmbientBase(
         ctx,
@@ -348,11 +346,11 @@ export function TownCanvas({
         cachePaintOptions,
         time,
         animated,
-        view.scale,
         box.clientWidth,
         box.clientHeight,
         dpr,
         deviceFactor,
+        cameraRef.current.zoom,
       );
     },
     [ambientPalette, ambientScene, ambientTerrain, bounds.left, bounds.top, cachePaintOptions, scene, theme, waterEffects],
@@ -638,8 +636,7 @@ export function TownCanvas({
     }
 
     const maxResolution = cacheResolution(bounds, fit.scale * MAX_ZOOM, dpr);
-    const k = view.scale * dpr;
-    ctx.setTransform(k, 0, 0, k, view.offsetX * dpr, view.offsetY * dpr);
+    setWorldTransform(ctx, view, dpr, bounds);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
       terrainCanvas.canvas,

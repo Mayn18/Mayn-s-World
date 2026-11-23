@@ -22,7 +22,7 @@ export class AmbientScheduler {
   private policy: AnimationPolicy = { enabled: false, reducedMotion: false, pageVisible: true };
   private timerId: number | null = null;
   private frameId: number | null = null;
-  private lastFrameTime = 0;
+  private lastFrameTime: number | null = null;
   private disposed = false;
 
   constructor(
@@ -33,21 +33,36 @@ export class AmbientScheduler {
 
   setPolicy(policy: AnimationPolicy): void {
     if (this.disposed) return;
+    if (
+      policy.enabled === this.policy.enabled &&
+      policy.reducedMotion === this.policy.reducedMotion &&
+      policy.pageVisible === this.policy.pageVisible
+    ) return;
     this.policy = policy;
     if (animationAllowed(policy)) {
-      this.render(this.environment.now(), true);
-      this.lastFrameTime = this.environment.now();
+      this.cancelPending();
+      const time = this.environment.now();
+      this.render(time, true);
+      this.lastFrameTime = time;
       this.schedule();
       return;
     }
 
     this.cancelPending();
+    this.lastFrameTime = null;
     if (policy.pageVisible) this.render(this.environment.now(), false);
   }
 
   renderCurrent(): void {
     if (this.disposed || !this.policy.pageVisible) return;
-    this.render(this.environment.now(), animationAllowed(this.policy));
+    const time = this.environment.now();
+    const animated = animationAllowed(this.policy);
+    this.render(time, animated);
+    if (animated) {
+      this.cancelPending();
+      this.lastFrameTime = time;
+      this.schedule();
+    }
   }
 
   dispose(): void {
@@ -64,19 +79,28 @@ export class AmbientScheduler {
       this.frameId !== null
     ) return;
 
-    const interval = 1000 / Math.min(30, Math.max(1, this.maxFramesPerSecond));
-    const delay = Math.max(0, interval - (this.environment.now() - this.lastFrameTime));
+    const interval = this.frameInterval();
+    const elapsed = this.lastFrameTime === null ? interval : this.environment.now() - this.lastFrameTime;
+    const delay = Math.max(0, interval - elapsed);
     this.timerId = this.environment.setTimeout(() => {
       this.timerId = null;
       if (this.disposed || !animationAllowed(this.policy)) return;
       this.frameId = this.environment.requestAnimationFrame((time) => {
         this.frameId = null;
         if (this.disposed || !animationAllowed(this.policy)) return;
+        if (this.lastFrameTime !== null && time - this.lastFrameTime < interval) {
+          this.schedule();
+          return;
+        }
         this.lastFrameTime = time;
         this.render(time, true);
         this.schedule();
       });
     }, delay);
+  }
+
+  private frameInterval(): number {
+    return 1000 / Math.min(30, Math.max(1, this.maxFramesPerSecond));
   }
 
   private cancelPending(): void {

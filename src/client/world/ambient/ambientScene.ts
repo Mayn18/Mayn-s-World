@@ -101,6 +101,18 @@ export interface AmbientScene {
   particleSeeds: ParticleSeeds;
 }
 
+export function staticCachePaintOptions(scene: AmbientScene): {
+  animatedStatic: false;
+  movingFigureTiles: ReadonlySet<number>;
+  movingAnimalPropIds: ReadonlySet<string>;
+} {
+  return {
+    animatedStatic: false,
+    movingFigureTiles: scene.movingFigureTiles,
+    movingAnimalPropIds: scene.movingAnimalPropIds,
+  };
+}
+
 function roadRoute(
   model: TerrainModel,
   roads: RoadLayer,

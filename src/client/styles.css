@@ -435,3 +435,27 @@ html[data-page-hidden] .ambient-sway {
   margin: 0;
   padding: 24px;
 }
+
+@media (max-width: 520px) {
+  .world-motion-control {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+  }
+
+  .world-motion-control > button {
+    min-height: 48px;
+  }
+
+  .world-theme-selector {
+    top: 100px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .world-theme-options {
+    max-height: calc(100dvh - 160px);
+  }
+}

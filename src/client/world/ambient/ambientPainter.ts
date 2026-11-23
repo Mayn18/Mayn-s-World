@@ -11,6 +11,7 @@ import type { AmbientScene, FlagAnchor, RoutePoint, SmokeAnchor } from './ambien
 import { updateWalkerPosition } from './ambientScene';
 import type { WaterEffectScene } from './waterEffects';
 import { paintWaterEffects } from './waterEffects';
+import { actorsVisible, fireflyCount } from './ambientLod';
 
 const STATIC_SMOKE = [
   [2, -4, 1.9, 0.5],
@@ -18,38 +19,34 @@ const STATIC_SMOKE = [
   [8, -14, 2.9, 0.24],
 ] as const;
 
-function paintSmoke(
-  ctx: CanvasRenderingContext2D,
+export function occluderPaintsAfterActor(
+  tileX: number,
+  tileY: number,
+  actorX: number,
+  actorY: number,
+): boolean {
+  const tileDepth = tileX + tileY;
+  const actorDepth = actorX + actorY;
+  return tileDepth > actorDepth || (tileDepth === actorDepth && tileX > actorX);
+}
+
+export function paintSmoke(
+  ctx: Pick<CanvasRenderingContext2D, 'save' | 'restore' | 'globalAlpha' | 'beginPath' | 'arc' | 'fill' | 'fillStyle'>,
   anchor: SmokeAnchor,
   palette: BuildingPalette,
   time: number,
   animated: boolean,
 ): void {
   ctx.save();
-  if (!animated) {
-    for (const [dx, dy, radius, alpha] of STATIC_SMOKE) {
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.arc(anchor.sx + dx, anchor.sy + dy, radius, 0, Math.PI * 2);
-      ctx.fillStyle = palette.white;
-      ctx.fill();
-    }
-  } else {
-    const cycle = (time / 3200 + anchor.phase) % 1;
-    for (let index = 0; index < 3; index++) {
-      const age = (cycle + index / 3) % 1;
-      ctx.globalAlpha = (1 - age) * 0.32;
-      ctx.beginPath();
-      ctx.arc(
-        anchor.sx + 1 + age * 5,
-        anchor.sy - 2 - age * 15,
-        1.6 + age * 1.3,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fillStyle = palette.white;
-      ctx.fill();
-    }
+  for (const [index, [dx, dy, radius, alpha]] of STATIC_SMOKE.entries()) {
+    const drift = animated ? Math.sin(time / 1600 + anchor.phase + index) * 0.8 : 0;
+    ctx.globalAlpha = animated
+      ? alpha * (0.9 + Math.sin(time / 1900 + anchor.phase + index) * 0.1)
+      : alpha;
+    ctx.beginPath();
+    ctx.arc(anchor.sx + dx + drift, anchor.sy + dy - (animated ? index * 0.35 : 0), radius, 0, Math.PI * 2);
+    ctx.fillStyle = palette.white;
+    ctx.fill();
   }
   ctx.restore();
 }
@@ -118,14 +115,15 @@ function paintActorOcclusion(
   terrain: TerrainPalette,
   paintOptions: ScenePaintOptions,
 ): void {
-  const actorDepth = position.x + position.y;
   const minX = Math.max(0, Math.floor(position.x) - 5);
   const maxX = Math.min(model.terrain.width - 1, Math.floor(position.x) + 5);
   const minY = Math.max(0, Math.floor(position.y) - 5);
   const maxY = Math.min(model.terrain.height - 1, Math.floor(position.y) + 5);
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
-      if (x + y <= actorDepth || !ambientScene.occlusionTiles.has(tileKey(x, y))) continue;
+      // Same-depth tiles are painted by ascending x in depth.ts.
+      if (!occluderPaintsAfterActor(x, y, position.x, position.y) ||
+        !ambientScene.occlusionTiles.has(tileKey(x, y))) continue;
       const faces = model.faces[y]![x]!;
       if (faces.south && faces.south.top > position.level) {
         paintTerrainFace(ctx, x, y, 'south', faces.south, terrain);
@@ -139,7 +137,7 @@ function paintActorOcclusion(
 }
 
 function paintActorBuffer(
-  ctx: CanvasRenderingContext2D,
+  ctx: Pick<CanvasRenderingContext2D, 'drawImage'>,
   buffer: HTMLCanvasElement,
   position: RoutePoint,
   paintActor: (ctx: CanvasRenderingContext2D) => void,
@@ -167,8 +165,8 @@ function paintActorBuffer(
   ctx.drawImage(buffer, foot.sx - 32, foot.sy - 54);
 }
 
-function paintActors(
-  ctx: CanvasRenderingContext2D,
+export function paintActors(
+  ctx: Pick<CanvasRenderingContext2D, 'drawImage'>,
   ambientScene: AmbientScene,
   buffers: HTMLCanvasElement[],
   scene: Scene,
@@ -181,7 +179,8 @@ function paintActors(
   animated: boolean,
   zoom: number,
 ): void {
-  const moving = animated && zoom >= 1.55;
+  if (!actorsVisible(zoom)) return;
+  const moving = animated;
   let bufferIndex = 0;
   for (const walker of ambientScene.walkers) {
     const position = updateWalkerPosition(walker, time, moving);
@@ -246,7 +245,7 @@ export function paintFireflies(
   zoom: number,
 ): void {
   if (theme.id !== 'enchanted-forest') return;
-  const count = Math.min(scene.fireflies.length, zoom < 1.35 ? 4 : zoom < 2 ? 12 : scene.fireflies.length);
+  const count = fireflyCount(scene.fireflies.length, zoom);
   ctx.save();
   ctx.fillStyle = theme.accent.color;
   for (let index = 0; index < count; index++) {
@@ -356,20 +355,18 @@ export function paintAmbientBase(
   paintOptions: ScenePaintOptions,
   time: number,
   animated: boolean,
-  zoom: number,
   viewportWidth: number,
   viewportHeight: number,
   dpr: number,
   deviceFactor: number,
+  cameraZoom: number,
 ): void {
-  paintWaterEffects(ctx, water, model, theme, time, animated);
+  paintWaterEffects(ctx, water, model, theme, time, animated, cameraZoom);
   paintCloudShadows(ctx, scene, model, theme, time, animated);
-  paintFireflies(ctx, scene, theme, time, animated, zoom);
+  paintFireflies(ctx, scene, theme, time, animated, cameraZoom);
   paintNightLights(ctx, scene, theme, time, animated);
-  if (zoom >= 1.35 || !animated) {
-    for (const smoke of scene.smoke) paintSmoke(ctx, smoke, palette, time, animated && zoom >= 1.35);
-  }
+  for (const smoke of scene.smoke) paintSmoke(ctx, smoke, palette, time, animated);
   for (const flag of scene.flags) paintFlag(ctx, flag, palette, time, animated);
-  paintActors(ctx, scene, actorBuffers, staticScene, model, theme, palette, terrain, paintOptions, time, animated, zoom);
-  paintWeather(ctx, scene, theme, time, animated, viewportWidth, viewportHeight, dpr, zoom, deviceFactor);
+  paintActors(ctx, scene, actorBuffers, staticScene, model, theme, palette, terrain, paintOptions, time, animated, cameraZoom);
+  paintWeather(ctx, scene, theme, time, animated, viewportWidth, viewportHeight, dpr, cameraZoom, deviceFactor);
 }

@@ -1,11 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildScene } from '../buildings/scene';
 import { townBuildings, townDecor, townWalls } from '../data/loader';
 import { tileKey } from '../decor/plan';
 import { buildDecorLayer } from '../decor/layer';
 import { townRoadLayer } from '../roads/town';
 import { townModel } from '../terrain/town';
+import { themes } from '../themes';
 import { buildAmbientScene, updateWalkerPosition } from './ambientScene';
+import { staticCachePaintOptions } from './ambientScene';
+import { paintActors } from './ambientPainter';
+import { buildingPalette } from '../buildings/palette';
+import { terrainPalette } from '../render/terrainPalette';
 
 const decor = buildDecorLayer(townModel, townRoadLayer, townBuildings, townWalls, townDecor);
 const scene = buildScene(townModel, townBuildings, townWalls, undefined, decor);
@@ -77,5 +82,33 @@ describe('buildAmbientScene', () => {
       }
     }
     expect(safeTileCount).toBeGreaterThan(0);
+  });
+
+  it('keeps moving figures out of the static cache and skips their updates at aerial zoom', () => {
+    const options = staticCachePaintOptions(ambient);
+    expect(options.animatedStatic).toBe(false);
+    expect(options.movingFigureTiles).toBe(ambient.movingFigureTiles);
+    expect(options.movingAnimalPropIds).toBe(ambient.movingAnimalPropIds);
+
+    const walker = ambient.walkers[0]!;
+    const initial = { ...walker.current };
+    const drawImage = vi.fn();
+    paintActors(
+      { drawImage },
+      ambient,
+      [],
+      scene,
+      townModel,
+      themes['daytime-meadow'],
+      buildingPalette(themes['daytime-meadow']),
+      terrainPalette(themes['daytime-meadow']),
+      options,
+      12000,
+      true,
+      1,
+    );
+
+    expect(walker.current).toEqual(initial);
+    expect(drawImage).not.toHaveBeenCalled();
   });
 });
