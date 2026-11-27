@@ -151,3 +151,208 @@ Trade-off: no linter means style and some bug classes are unchecked for now; the
 - **Goose migrations are not part of this change.** No tables exist yet. Migrations arrive with the Phase 2 data model.
 
 **Trade-offs accepted:** the Compose password is placed in a URL, so it must avoid URL-special characters (documented in `.env.example`); `Config` hides the URL in formatted output, which costs a small `String` method.
+
+## ADR-015 — Frontend visual foundation: SVG sprites, palette-driven themes, hash navigation
+**Status:** Accepted. Partly superseded by ADR-016: the "SVG, not a canvas" choice no longer applies to the town's world-rendering layer. Everything else here still stands.
+
+**Decision:** the Daytime Meadow home page is built from inline SVG pixel art written as text grids, themed through a typed palette that becomes CSS variables, with real DOM links over the art and a plain destination index beside it. Destinations are selected through the URL hash, with no router library yet.
+
+**Choices and reasons:**
+- **Inline SVG sprites from text grids, not a canvas or image files.** Keeps all content in the DOM (invariant: no whole-site canvas), needs no external or paid assets, cannot fail to load, and the art is reviewable as text in a pull request. Trade-off: hand-drawn art in this format is limited to small sprites; larger or animated art may later justify image sprite sheets.
+- **Colours by name, values in a TypeScript palette.** One place defines every colour, sprites and UI never hold hex values, and a test can enforce contrast for every theme. Trade-off: the palette lives in JavaScript, so colours are applied by a small script before React renders instead of only by a stylesheet.
+- **Real links over the art, plus a permanent destination index.** Exploration is the primary surface, but never the only one (invariant). Below 720px the scene's links are removed (not hidden) and the index becomes the main way in: tiny tap targets and duplicate tab stops are worse than a scenic banner.
+- **URL hash instead of a router.** The pages do not exist until Phase 5, and a hash gives deep links and Back and Forward for free. Trade-off: hash URLs are replaced by real paths when pages arrive. That change is contained: `parseHash` and `useSelectedDestination`.
+- **CSS-only ambient motion.** Only `transform` is animated; there are a few elements. Motion (the animation library) is not added because nothing needs it yet. The in-page switch is locked off when the operating system asks for reduced motion.
+- **One new dependency, `@fontsource-variable/pixelify-sans`.** Self-hosts an open-licensed pixel font so no third-party font host is contacted. Only headings and labels use it. Body text stays in the system font.
+- **No linter or formatter was added.** That decision is still open in Phase 1.
+
+**Not yet decided:** theme switching and persistence (Phase 4), the real routing approach (Phase 5), whether the optional avatar uses sprites in the same format.
+
+## ADR-016 — Canvas 2D for the isometric world-rendering layer
+**Status:** Accepted.
+
+**Relationship to ADR-015:** ADR-015 drew the meadow as inline SVG and rejected a canvas. That was right for a scene of about thirty sprites. It does not scale to the approved town: an 80 x 60 tile map is 4,800 tiles before buildings, trees, props and ambient animation, and an SVG document with that many nodes is slow to build, style and animate. ADR-016 therefore replaces the SVG choice **for the world layer only**. The rest of ADR-015 is unchanged: colours by name from the theme registry, real DOM links and a permanent destination index, hash navigation, CSS-only interface motion, and the self-hosted pixel font. The meadow files are not modified by this ADR (ADR-017 later removed the meadow from the page).
+
+**Decision:** the isometric town is drawn with Canvas 2D in `src/client/world/`. React owns the `<canvas>` element and decides when to draw; the drawing logic lives in plain modules that know nothing about React.
+
+**Boundaries (these keep the invariant "no whole-site canvas" true):**
+- The canvas draws the world only: terrain, then later buildings, vegetation and ambient life.
+- Text, links, buttons, forms and panels stay in the DOM. Destination buildings will get real `<a>` elements positioned over the canvas from the same projection, so keyboard and screen-reader navigation does not depend on the canvas.
+- The canvas is `role="img"` with a text description until something in it is interactive.
+- Navigation stays outside the renderer: it reports "building N was selected" and a destination lookup (`content/destinations.ts`) decides what that means.
+
+**Structure (responsibilities kept separate and independently testable):**
+- `world/data/`: `layout.json` (unmodified source of truth), `types.ts`, and `loader.ts`, which validates the file and turns the row strings into typed arrays.
+- `world/render/projection.ts`: tile to screen maths (2:1 isometric, 32 x 16 tiles, 10 px per level) and its inverse.
+- `world/render/depth.ts`: back-to-front drawing order.
+- `world/render/picking.ts`: which tile is under a screen point.
+- `world/render/terrainPainter.ts` and `terrainPalette.ts`: the only code that draws, and the theme-to-colour step.
+- `world/TownCanvas.tsx`: the React component.
+
+**Choices and reasons:**
+- **No new dependency.** The browser's own Canvas 2D API is enough. A game engine would bring concepts and a bundle size this project does not need.
+- **Colours come from the Theme object, not from CSS variables.** A canvas cannot read `var(--c-grass)`. `terrainPalette(theme)` reads the same typed palette that sets the CSS variables, so the canvas and the page cannot disagree and there are still no colour values outside `themes.ts`.
+- **`layout.json` is copied into the repository unmodified** and validated at load. Visual detail that the JSON does not contain (roofs, tree species, castle height) will live in separate renderer-side files keyed to it, so the geography can be checked against the data alone.
+- **Drawing resolution equals the art size** (1 canvas pixel = 1 art pixel). CSS scales it down only, with `image-rendering: pixelated`. It is never scaled up, because a non-integer upscale makes some pixels wider than others.
+- **Each polygon is filled and then stroked in the same colour.** Anti-aliasing otherwise leaves hairline gaps between neighbouring diamonds.
+- **A one-level "slab" under the patch's south and east edges** makes a cut-out of the map look like a solid block.
+
+**Trade-offs accepted:** the world is not in the DOM, so nothing in it is automatically accessible or searchable; the accessible overlay and the destination index carry that duty. Canvas pixels cannot be unit-tested the way DOM can; tests cover the maths, ordering, data and the sequence of drawing calls, and the look is checked by eye. A theme change must trigger a redraw.
+
+**Not yet decided:** the depth-sorting rule for buildings and other multi-tile objects, camera and zoom behaviour, how sprites are supplied (procedural, hand-made or generated), animation layers, and how the whole 80 x 60 map is cached for performance.
+
+## ADR-017 — The isometric world is the full-window home page
+**Status:** Accepted.
+
+**Decision:** the home page is one canvas filling the browser window (`100vw x 100dvh`) and nothing else. The meadow scene, the "Where to?" destination index, the page header, footer and the centred narrow layout were removed from `App.tsx`. The visitor is meant to enter a world, not visit a page that contains a game preview.
+
+**What was kept:** every removed component, `content/destinations.ts`, `content/home.ts`, the hash-navigation hooks and the meadow art remain in the repository, unused. Destinations will be connected to buildings in a later milestone through the same content modules. The renderer does not import any of them.
+
+**Sizing:**
+- The canvas fills its box and is redrawn when the box resizes (`ResizeObserver`, plus `resize` for device-pixel-ratio changes). Its drawing buffer is the box size times `devicePixelRatio`, so it is sharp on dense screens.
+- The terrain is scaled by one number, the same horizontally and vertically, and centred (`render/viewTransform.ts`, "contain" fitting), so it is never stretched. The space around it is a sky gradient taken from the theme's sky colours.
+- `dvh` rather than `vh`, so a phone's address bar showing or hiding does not push the bottom of the world off screen. `body` is `overflow: hidden` and the old `scrollbar-gutter` rule was removed because the page no longer scrolls.
+- Pointer positions go back through the same transform before tile picking, so picking stays correct at any window size.
+
+**Known consequences:**
+- **Accessibility gap, deliberate and temporary:** with the destination index gone there is no navigation UI. Navigation is a stated invariant (a visible destination index and accessible fallback), so it must come back before any destination is considered reachable. The page keeps a visually hidden `<h1>` and the canvas has a text description.
+- The 32 x 24 patch was a temporary stand-in; Milestone 2 (ADR-018) replaced it with the full 80 x 60 terrain. The terrain is still a wide diamond, so it is small on a tall, narrow screen.
+- Scaling is fractional (not whole-number), which suits vector-drawn terrain. Bitmap sprites will need their own scaling rule (probably whole-number pixel scales) when they arrive.
+- The ambient-motion switch and server-status line are no longer shown. Their code remains.
+
+**Not yet decided:** camera pan and how the interface (title, map index, controls) overlays the world. Zoom is recorded in ADR-022.
+
+## ADR-018: Full-map terrain model and derived boundary materials
+
+**Status:** Accepted (Milestone 2).
+
+**Decision:** the renderer draws the complete 80 x 60 terrain from `layout.json`, replacing the 32 x 24 patch. Rendering is split into a pure terrain model (`src/client/world/terrain/`) and thin canvas painters (`render/`).
+
+**Why a model:** the file gives a height and a water flag per tile, but not what each step between heights is made of. `terrain/edges.ts` derives it from rules that use only data in the file. The renderer needs this knowledge to be testable without a canvas, so the painter is a loop over the model.
+
+**Derived materials, honestly:** `level_edges` in the file are totals without locations. Rules: water involved gives cascade or bank; a drop of 2 or more is cliff; a drop of 1 touching level 4 or higher is castle; any other drop of 1 is a retaining wall if at least half of its continuous straight run lies within one tile of a road, otherwise a grass slope, except at ramp and stairs tiles, which are always slope. Against the file's totals: castle 96 (exact), cliff 56 (exact), bank 4 (exact), slope + wall 285 (exact), but the split is 166 slope / 119 wall here against 152 / 133 in the file. The wall/slope split is therefore an approximation, isolated in `markRetainingWalls`, and may be changed on review.
+
+**Drawing:** painter's algorithm in order of increasing `x + y`. For each tile the south face, east face and top are drawn. A face's bottom edge is produced by the same projection call as the lower tile's top edge, so there are no seams (tested for every step in the town). Lighting is from the upper left: south faces lit, east faces shaded. Water surfaces sit 0.4 level below land, are shaded by distance from the shore and have a pale shore line. The map is drawn as a solid block with cut faces on its south and east edges.
+
+**Not done here:** roads (rasterised and loaded, so ramps, stairs and bridges can be drawn later; drawn in ADR-019), buildings, vegetation, props, animation, camera pan and zoom. The three duplicate-door pairs in `layout.json` remain unresolved and unchanged (see `src/client/world/data/README.md`).
+
+**Known limits:** picking tests only the top surface of tiles, so a point on a cliff face returns the tile visible behind it. Terrain colours come from the theme, but only one theme exists.
+
+
+## ADR-019: Clean flat-shaded rendering; superseded by ADR-024
+
+**Status:** Superseded by ADR-024. Its rejection of noisy, procedurally baked per-pixel texture remains in force.
+
+**Context:** Milestone 3 added roads, stairs, ramps and bridges by drawing the whole town into a software pixel buffer, with seeded per-pixel texture (grass speckle, cobbles, planks, strata) baked into one bitmap. On review the owner rejected the result: repetitive checkerboard grass, roads with many tiny contrasting details, noise over every surface, and a look unlike the approved Milestone 2 terrain. The approved direction is the Milestone 2 rendering: clean isometric surfaces, a restrained palette, clear elevation differences, no repeated patterns.
+
+**Decision at the time:** the visual style was the Milestone 2 style: flat-colour polygons, one colour per material, light from the upper left, detail from shape and elevation rather than texture. The pixel buffer, the shader modules (`bake/`), the bitmap wrapper and the theme material ramps were removed. ADR-024 replaces this art direction with authored, structured pixel detail; it does not restore random per-pixel texture.
+
+**Kept from Milestone 3, unchanged in behaviour:** the per-tile road data (kind, direction, name), `roads/crossings.ts` (ramps and stairs across a road's whole width, bridge decks), the wall-versus-slope rule that breaks a retaining wall where a road climbs, the terrain model, elevation and depth ordering, and their tests. The Market Square (`roads/plaza.ts`) is kept as a renderer-side decision, not data.
+
+**Drawing:** `render/roadPainter.ts`, called from the painter's far-to-near loop. A street, lane, track or the square is a flat tile top over the grass (the grass under it is not drawn, which would otherwise show as a faint line along every tile edge). Streets and the square get a thin kerb along sides that meet other ground; lanes and tracks do not. A ramp is the road colour laid over the face it climbs; stairs add a lit edge for every tread. A bridge deck sits at the height of the land with a rail on open sides and a side that hangs to the water: stone for a main street, timber otherwise. All colours are mixes of theme colours in `terrainPalette.ts`.
+
+**Trade-offs at the time:** the flat surfaces left broad areas visually quiet. ADR-024 addresses this with restrained, material-specific patterns authored on the existing painters.
+
+**Not done here:** buildings, vegetation and props. Their subsequent design is described by ADR-020 and ADR-024.
+
+
+## ADR-020: The town is built from the Stage 2 v2 references: round towers, specialised buildings, a decor layer
+
+**Status:** Accepted, pending owner review of the screenshots in `docs/screenshots/`. Builds on ADR-016, ADR-017 and ADR-019. Stage 3 and Stage 4 refinements to roads and ecology are recorded under ADR-021.
+
+**Context:** the first building pass drew every building as boxes with roofs and the castle as square towers with blue pyramid roofs; there were no trees, props or fields. Compared with the approved aerial and the five close-ups, the castle was wrong (the reference has round towers with terracotta, brown and slate cones), a dozen kinds (windmill, mill, barns, chapel, observatory, stalls, fountain, bandstand, market, granary, boathouse, town gates) fell back to a generic house, and the countryside was empty.
+
+**Decision:**
+- Castle: towers and corner turrets are cylinders with cone roofs (`buildings/solids.ts`), each tower with its own roof colour; the keep has a recessed storey under a slate hip roof; the gatehouses have an iron portcullis and slate roofs. The four gates inside the town (ids 27, 28, 33, 34) are pale round towers with slate cones, as in the aerial.
+- Specialised buildings: the barn, farm, granary, boathouse, chapel, observatory, mill and fish market are new recipes in `styles.ts` (with two new extras, `barnDoor` and `wheel`). The windmill, fountain, stalls and bandstand are not boxes, so they have small painters in `buildings/specials.ts`.
+- Environment: a new `decor/` layer. `data/decor.ts` reads the props, yards, fences, crop fields, willows and reeds already in `layout.json`; `decor/plan.ts` places forests, lawn trees, rocks and villagers from rules read off the aerial (dense conifer forest north and north-east, broadleaf woods on the west edge, open eastern meadow, sparse lawn trees); `decor/plants.ts` and `decor/props.ts` draw them; `decor/layer.ts` hands each tile its ground items (crop rows, garden beds) before buildings and its standing items (fences, props, plants, figures) after them.
+- Depth: unchanged. Everything is painted when the far-to-near loop reaches its tile; buildings still anchor at their south-east tile; plants within a tile are sorted by their south position.
+
+**Rules kept:** every colour comes from the theme (three theme colours were added to the building palette, no hex values in painters); no texture or noise (crop rows are thin lines, forests are flat-shaded shapes); placement is a hash of the tile, so the town is identical on every load.
+
+**Interpretations to confirm:** `field_types` codes are not named in the file. They were matched to the aerial: 1 wheat, 2 furrowed crops, 3 straw, 4 pasture (fenced, with the six sheep). The forest zones and the town-gate towers are the renderer's reading of the aerial.
+
+**Not done yet:** the waterfall refinement, animation of smoke, sails and water, cached rendering (the whole town redraws on resize, about 2,500 trees and 96 buildings), and real destination links over the canvas. Stage 4 adds a short millrace beside the water mill (ADR-021).
+
+## ADR-021 — Town redesign: castle hill and building families
+**Status:** Accepted (branch `feat/town-world-redesign`)
+
+The owner authorised a substantial redesign of the town's geography. `layout.json` was edited
+for the castle hill; `layout.original.json` is the unmodified export and the way back.
+
+- The castle stands on a two-level hill (outer ward level 5, inner ward level 6) above the
+  town terraces at level 3, with level 4 shelves for the barbican and the postern. The
+  terrain palette now has colours for levels 0 to 7; levels 0 to 5 are unchanged.
+- Housing is chosen from three families (wealthy, merchant, ordinary) by district, size and
+  building id, using the new appearance features `groundWall`, `jetty`, `quoins` and
+  `balcony`. The six destination buildings keep their own recipes.
+- Surface detail still comes from geometry (courses, battered feet, corbels, crowns), never
+  from texture (ADR-019).
+
+- Everyday-life props (barrels, carts, woodpiles, troughs, cattle, training dummies, laundry)
+  were added in restrained numbers beside homes, the market, the harbour, farms and the castle
+  wards. The map file now holds 130 props.
+
+Stage 3 completed the road hierarchy and public-space refinement: the main market street now
+continues across the square, the plaza has a broad perimeter paving course, and farm tracks
+have their own surface. The castle approach, district streets and existing bridge crossings
+remain connected without moving buildings.
+
+Stage 4 completed the ecology refinement: forest edges feather into open land, mapped orchard
+trees, hedgerows and a farm windbreak follow the field boundaries, and deterministic reeds and
+willows favour open riverbanks. Two water tiles extend the stream along the water mill as a
+short millrace. Cultivated fields and town lawns remain open.
+
+## ADR-022 — Cursor-focused town zoom
+**Status:** Accepted (branch `feat/town-world-redesign`).
+
+The town camera keeps its existing contain-fit as the 1x framing and allows zoom from 1x to 4x.
+Wheel deltas are normalized across pixel, line and page input, capped per event, and applied
+exponentially so trackpads and mouse wheels feel predictable. Zoom keeps the picture point under
+the cursor stationary; reaching 1x restores the full-town framing. The camera stores its zoom and
+picture-space viewport centre, so a resize updates the fit without resetting either. Wheel redraws
+are coalesced to one animation frame. The existing device-pixel-ratio drawing buffer and uniform
+Canvas transform are retained, and picking uses the same camera transform as rendering. Left-mouse
+drag pans by updating that same picture-space centre; pointer capture keeps the drag active outside
+the canvas. A 4 CSS-pixel threshold preserves simple clicks, while a completed drag suppresses its
+generated click. Cancellation and lost capture end the gesture without leaving stale camera input.
+
+**Trade-off:** the 4x cap is relative to each viewport's fit, providing close inspection while
+bounding how far the world can be enlarged on small and large displays alike. Panning is not
+bounded, so users can move the town out of the viewport.
+
+## ADR-023 — Cache the static town for camera redraws
+**Status:** Accepted (branch `feat/town-world-redesign`).
+
+**Context:** panning or zooming repainted all 4,800 terrain tiles and every building and decor item, although the town itself does not move. A local browser profile at 1024 x 768 reported roughly 185,000 Canvas 2D calls per redraw. With only animation-frame timing instrumentation, zoom redraws took 136–156 ms and a pan redraw took 281 ms; runs that also wrapped Canvas methods took 269–366 ms, so those call-count timings include instrumentation overhead.
+
+**Decision:** `TownCanvas` renders the existing painter output into offscreen canvases sized for the maximum camera zoom and device-pixel ratio. It first displays a 1x cache, then builds a higher-resolution cache in short animation-frame batches and swaps it in only when complete. The cache uses power-of-two scale tiers up to a 64 MiB per-image budget; it is not rebuilt for camera wheel or pan events, and higher-resolution results are reused when zooming back out. A larger viewport or DPR only triggers an upgrade when the current cache no longer covers the new maximum output scale. The existing terrain, building, decor and depth-order painters remain the source of truth; no geography or art is simplified.
+
+**Trade-offs:** an upgrade temporarily retains both the old and new full-world bitmaps, and the 64 MiB cap can require some upscaling on very high-DPR or large displays. The old cache remains visible while an upgrade is prepared, so there is no blank frame; the painter is split into contiguous depth-ordered batches to keep individual main-thread tasks short. The world is static today. Future animated or otherwise dynamic elements should use a separate layer or an explicit cache invalidation rather than repainting the full town during camera movement.
+
+## ADR-024 — Stage 2 pixel-art treatment on the current town geography
+**Status:** Accepted on `feat/town-world-redesign`.
+
+**Context:** the owner supplied seven Stage 2 reference images in `docs/reference-art/` and authorized them to supersede the flat-shaded rendering direction in ADR-019. The current redesigned map, including its castle hill, roads, river and destination footprints, remains authoritative and is not the Stage 2 reference geography.
+
+**Decision:** use the supplied images as the visual target: hand-authored isometric pixel art with a consistent world-space pixel grid, stepped outlines, warm controlled colours, material-specific highlights and shadows, and recognizable architectural silhouettes. Masonry courses, roof shingles, cobbles, foliage clusters and water highlights are deliberate reusable details, not random noise or checkerboard fills. Building families continue to be selected from their existing recipes and deterministic data. The existing Canvas 2D renderer, world data, projection, painter order, camera, interaction, and adaptive-resolution cache remain in place. Cache compositing uses nearest-neighbour sampling so pixel edges stay crisp at zoom.
+
+**Geography invariant:** this is an art redesign only. Do not edit `layout.json`, terrain coordinates/elevations, footprints, object positions/rotations, roads, rivers, district boundaries or navigation data. Any visual improvement must be achieved in renderer-side assets and painters.
+
+**Trade-offs:** authored material details add drawing work to cache generation, while nearest-neighbour scaling preserves pixel edges rather than smoothing them. The 64 MiB cache budget and incremental upgrade behavior remain; measure rendering on the full town and keep static details in the existing cached layer.
+
+**Validation:** review the castle, plaza, wharf, countryside, terraces and full aerial against the checked-in references at both fitted and zoomed scales. Run frontend typecheck, tests and production build. A change to town coordinates is out of scope.
+
+## ADR-025 — Terrace Cathedral within the owner-marked construction site
+**Status:** Accepted for the marked area in the owner's screenshot.
+
+**Context:** the owner later authorized a substantially larger religious landmark and explicitly permitted layout changes inside the red outline. This is a scoped exception to ADR-024's no-geography-change rule, not a general approval to alter the rest of the town.
+
+**Decision:**
+- Repurpose building 17 as the Terrace Cathedral at `(18, 21)`, footprint `5 × 8`, with its south entrance at `(20, 29)`. The footprint ends immediately before the existing Cottage Road.
+- Remove residential buildings 51, 52, 53 and 74, barrels at `(19, 21)` and `(21, 24)`, and the garden yard attached to building 53. Add a small `2 × 4` planted churchyard at `(15, 25)` west of the existing path. Preserve the Chapel Steps and Cottage Road geometry so the entrance stays connected to the street.
+- Keep terrain, elevations, other roads, buildings and decor unchanged. The marked boundary is interpreted approximately from the isometric screenshot; the selected footprint stays within its clear interior.
+- Use a dedicated pixel-art cathedral painter with a long stone nave, slate roof, stained-glass windows, buttresses, arched south entrance, steps and a tall rear bell tower.
+
+**Validation:** tests check the changed building count, footprint overlaps, road clearance and the continuous path from the cathedral door to Cottage Road. Review the full-town overview and close-up, then run typecheck, tests and production build.
+

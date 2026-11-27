@@ -37,6 +37,16 @@ Each theme defines environment, palette, UI surfaces/borders, typography treatme
 
 Build one polished environment first. Architect for all six; do not deliver six incomplete scenes.
 
+## Art direction for the town
+- Follow the supplied Stage 2 reference images in `reference-art/`: detailed, crisp isometric pixel art with a consistent pixel grid and a warm, controlled palette.
+- Light comes from the upper left; south-facing surfaces are lit and east-facing surfaces are shaded. Dark pixel outlines, stepped silhouettes and distinct material colours make forms readable.
+- Detail is hand-placed and purposeful: masonry courses, timber framing, roof shingles, paving joints, foliage clusters and water highlights. Do not use random noise, checkerboard fill or indiscriminate speckle.
+- Buildings have recognizable silhouettes, material transitions, eaves, ridges, chimneys, framed windows and doors. Their architecture varies by family and district.
+- Roads and public spaces use legible cobbles, borders and intentional props. Water and vegetation use the reference's clear, layered pixel shapes.
+- The open background around the town uses a soft daylight-blue gradient, kept separate from terrain and water colours.
+- The Stage 2 images define the art style, not the current geography. The current `layout.json` and its positions remain authoritative.
+- See ADR-024 for the approved redesign and rendering constraints.
+
 ## Rendering and interaction
 - Use Canvas or CSS for atmosphere where appropriate.
 - Keep actual text, links, forms, buttons and content in semantic DOM.
@@ -86,3 +96,9 @@ Use pixel fonts selectively for headings, labels and decorative elements. Use a 
 
 ## Explicit exclusions
 No combat, inventory, character stats, unrelated quests, multiplayer, complex physics, mandatory character movement or decorative interaction that makes navigation harder.
+
+## The built town (ADR-020)
+The town now follows the Stage 2 v2 aerial: a castle on the northern hill with round towers and cone roofs, a market square with a fountain and four striped stalls, terraces of varied houses in the west, a wharf and boats on the river, farmland, pasture and a windmill in the south-east, and forests framing the north, north-east and west. Reference screenshots of the build are in `docs/screenshots/`.
+
+Rules for adding to it: architectural variety comes from silhouette, roof shape and colour, floors, wall material, chimneys and one or two details, never from texture. Keep lawns open: trees are sparse on town lawns and dense only in the forest zones. Everything is lit from the upper left and its shadow falls to the lower right.
+

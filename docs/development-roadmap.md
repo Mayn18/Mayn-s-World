@@ -36,22 +36,56 @@ Acceptance: clean local Docker startup and production image startup. Phase 1 is 
 
 Acceptance: migrations can be applied to an empty database and backed up/restored.
 
-## Phase 3 — Exploration prototype
-- One polished environment.
-- Clickable destinations.
-- Map/destination index.
-- Keyboard and touch navigation.
-- Accessible labels and focus states.
-- Responsive behavior.
+## Phase 3 — Exploration prototype (in progress)
+Done (frontend visual foundation):
+- One environment: the Daytime Meadow, drawn as inline SVG pixel art (cabin, notice board, mailbox, signpost, trees, path, clouds, sun).
+- Clickable destinations: the cabin (About), notice board (Projects), mailbox (Contact) and signpost planks (Blog, Resume, GitHub). Each opens a placeholder panel; GitHub opens the owner's profile in a new tab.
+- Destination index: a plain `<nav>` list of all six destinations.
+- Keyboard and touch navigation, visible focus rings, descriptive labels, a skip link and landmarks.
+- Responsive layout: interactive scene from 720px wide; below that the scene is a scenic banner and the index becomes large touch cards.
+- Ambient motion (drifting clouds, swaying flowers) with an in-page switch, a saved preference and `prefers-reduced-motion` support.
 
-Acceptance: visitors can reach every core destination without avatar movement.
+Done (town render foundation, milestone 1):
+- `layout.json` copied unmodified into `src/client/world/data/`, with a validating loader.
+- Isometric projection, back-to-front drawing order, tile picking and a terrain painter, each with tests (ADR-016).
+- A 32 x 24 tile terrain patch with elevation, cliff faces, water and a tile-under-cursor readout.
 
-## Phase 4 — Pixel UI and theme engine
-- Reusable pixel-art UI components.
-- Centralized theme registry.
-- Implement and polish the first theme.
-- Add remaining themes progressively.
-- Theme persistence and crossfade.
+Done (full-viewport world, ADR-017):
+- The page is one full-window canvas (`100vw x 100dvh`). The terrain keeps its proportions, is centred and refits when the window resizes, on a sky background. The meadow scene and the destination index were removed from the page; their files and `content/destinations.ts` remain.
+- Known interim gap: there is no navigation UI until destinations become buildings, so the accessible-navigation invariant is not met on the home page for now. It must be restored when the six destination buildings are added.
+
+Done (Milestone 2, ADR-018):
+- The complete 80 x 60 terrain: all six elevation levels, river, riverbanks, cliffs, castle bases, masonry retaining walls and grass slopes, drawn as a solid block that fits the window. Roads, ramps, stairs and bridges were loaded and tested here and are drawn in the next entry.
+
+Done (Milestone 3 and its art-direction correction, ADR-019):
+- Per-tile road data (main streets, lanes, tracks, piers), ramps and stairs across the whole width of a road, bridge decks, and the paved Market Square.
+- Drawn in the Milestone 2 style: flat colour, a thin kerb on paved ground, plain stairs and ramps, timber and stone bridges. An earlier pixel-texture rendering was rejected and removed (ADR-019).
+- Waiting on the owner's approval of this look before any building artwork is started.
+
+Done (Milestone 4, town art: castle, buildings, vegetation and props, ADR-020):
+- All 96 building footprints are drawn with designed looks: round-tower castle, six destination buildings, houses, shops, farm and harbour buildings, windmill, fountain, stalls and bandstand.
+- A decor layer adds forests, lawn trees, fences, crop fields, garden beds, props, boats, sheep and villagers.
+- Not yet: waterfall and mill race, animation, destination links, cached drawing.
+
+Remaining for the town: selectable destination buildings; ambient life. Camera zoom and mouse-drag panning are implemented in ADR-022. The unused meadow files stay until they are deleted deliberately.
+
+Remaining:
+- Real destination pages (Phase 5). Until then each destination shows a placeholder panel and nothing else.
+- Optional avatar and movement.
+- Owner review of the art and layout, and a check on real phones and tablets.
+
+Acceptance: visitors can reach every core destination without avatar movement. Met for navigation to the placeholder panels; the phase stays open until the owner has reviewed it.
+
+## Phase 4 — Pixel UI and theme engine (in progress)
+Done (frontend visual foundation):
+- Centralized theme registry (`src/client/world/themes.ts`): six complete palettes become CSS variables, with contrast and validity tests. Daytime Meadow remains the visual baseline.
+- Theme selector with all six themes, keyboard and touch-friendly native controls, and saved preference restoration with a safe default fallback.
+- Instant C5 theme switching: the current flattened cache is invalidated and rebuilt; no separate theme cache or transition animation is introduced.
+- Reusable pixel UI: `PixelSprite`, `PixelPanel`, and the `pixel-button` and `pixel-card` styles.
+- A self-hosted pixel heading font.
+
+Remaining:
+- Owner review and any requested polish to the theme presentation.
 
 Acceptance: themes change presentation without changing functionality.
 

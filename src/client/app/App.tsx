@@ -1,46 +1,39 @@
-import { useEffect, useState } from 'react';
-import { fetchHealth } from '../api/health';
+import { useSyncExternalStore } from 'react';
+import { TownCanvas } from '../world/TownCanvas';
+import {
+  getActiveTheme,
+  subscribeActiveTheme,
+} from '../world/activeTheme';
+import { ThemeSelector } from '../components/ThemeSelector';
+import { MotionToggle } from '../components/MotionToggle';
+import { useAmbientMotion } from '../world/ambient/useAmbientMotion';
 
-// A request is in exactly one of these states. Modelling it as one value
-// (instead of separate loading/error booleans) makes impossible combinations,
-// like "loading and failed", impossible to represent.
-type ApiStatus =
-  | { kind: 'loading' }
-  | { kind: 'ok' }
-  | { kind: 'error'; message: string };
-
+// The whole page is the world: one full-window canvas, nothing around it.
+//
+// There is deliberately no header, card grid or footer here. Destinations will
+// become buildings in the world (a later milestone), reached through the same
+// content modules (`content/destinations.ts`), which are untouched and simply not
+// shown for now. The renderer does not import any of them.
+//
+// <h1> is visually hidden: the page still needs a title for screen readers and
+// search engines, but the picture is the experience.
 export function App() {
-  const [status, setStatus] = useState<ApiStatus>({ kind: 'loading' });
-
-  useEffect(() => {
-    // Cancel the request if the component unmounts (or StrictMode re-runs this
-    // effect in development), so a late response cannot update stale state.
-    const controller = new AbortController();
-
-    fetchHealth(fetch, controller.signal)
-      .then(() => setStatus({ kind: 'ok' }))
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setStatus({
-          kind: 'error',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
-      });
-
-    return () => controller.abort();
-  }, []);
-
+  const ambientMotion = useAmbientMotion();
+  const theme = useSyncExternalStore(
+    subscribeActiveTheme,
+    getActiveTheme,
+    getActiveTheme,
+  );
   return (
-    <main className="mx-auto max-w-xl p-8">
-      <h1 className="text-3xl font-bold">Mayn&apos;s World</h1>
-      <p className="mt-4">
-        {/* aria-live announces the result to screen readers when it arrives. */}
-        <span role="status" aria-live="polite">
-          {status.kind === 'loading' && 'Checking the server…'}
-          {status.kind === 'ok' && 'Server status: ok'}
-          {status.kind === 'error' && `Server unreachable: ${status.message}`}
-        </span>
-      </p>
+    <main className="world-viewport">
+      <h1 className="sr-only">Mayn&apos;s World</h1>
+      <TownCanvas
+        theme={theme}
+        motion={ambientMotion.motion}
+        reducedMotion={ambientMotion.lockedByDevice}
+      />
+      <ThemeSelector currentThemeId={theme.id} />
+      <MotionToggle {...ambientMotion} />
     </main>
   );
 }

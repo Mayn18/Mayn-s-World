@@ -6,11 +6,11 @@ The visual direction is inspired by my earlier project, [Beep-Bot](https://githu
 
 ## Status
 
-Phase 1, in progress. The repository contains documentation, GitHub templates and a working application skeleton: a React page that calls a Go `GET /api/health` endpoint, with the Go server also able to serve the built React app from one origin. A multi-stage Dockerfile builds the production image, and Docker Compose runs the app with PostgreSQL 17 locally. The health check reports database connectivity. There are no database tables, migrations or website content yet, and nothing is deployed.
+Phase 1, in progress. The repository contains documentation, GitHub templates and a working application skeleton: a React page that calls a Go `GET /api/health` endpoint, with the Go server also able to serve the built React app from one origin. A multi-stage Dockerfile builds the production image, and Docker Compose runs the app with PostgreSQL 17 locally. The health check reports database connectivity. The home page is a full-window isometric world: a canvas that draws a temporary 32 x 24 tile patch of terrain from the town's map data, with no other page content yet. There are no database tables, migrations or real page content yet, and nothing is deployed.
 
 ## Technology
 
-- Frontend: React, TypeScript, Vite, Tailwind CSS (Motion planned)
+- Frontend: React, TypeScript, Vite, Tailwind CSS. Pixel art is inline SVG; CSS handles animation (the Motion library is planned, not yet used)
 - Backend: Go, standard library `net/http` only
 - Node.js 26 LTS and npm: frontend tooling and builds only, not the production backend
 - Tests: Vitest (frontend), Go `testing` + `httptest` (backend)
@@ -26,7 +26,8 @@ cmd/server/        Go program entry point (startup, graceful shutdown)
 internal/config/   environment configuration (PORT, STATIC_DIR)
 internal/handlers/ HTTP handlers, JSON helpers, React app file server
 internal/server/   routes, middleware, http.Server timeouts
-src/client/        React app (app/, api/, main.tsx, styles.css)
+src/client/        React app: app/, api/, world/ (themes, isometric renderer, map data, earlier meadow scene),
+                   components/, content/, main.tsx, styles.css
 index.html         Vite entry page
 vite.config.ts     Vite, Tailwind, test and dev-proxy configuration
 Dockerfile         production image: builds the React app and the Go binary
@@ -48,7 +49,7 @@ go run ./cmd/server        # terminal 1: Go API on http://localhost:8080
 npm run dev:client         # terminal 2: React on http://localhost:5173
 ```
 
-Open http://localhost:5173. The page shows "Server status: ok" when it can reach Go. Stop the Go server and reload to see the error state.
+Open http://localhost:5173 to see the world. It fills the window; resize the window to see it refit. Move the pointer over the ground to see which tile is under it.
 
 **Production-like** (one process, one origin):
 

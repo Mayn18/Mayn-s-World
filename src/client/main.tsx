@@ -2,6 +2,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
 import './styles.css';
+import { applyTheme } from './world/themes';
+import { getActiveTheme, restoreActiveTheme } from './world/activeTheme';
+
+restoreActiveTheme();
+applyTheme(document.documentElement, getActiveTheme());
 
 const container = document.getElementById('root');
 if (!container) {

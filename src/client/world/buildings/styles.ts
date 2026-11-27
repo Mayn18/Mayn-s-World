@@ -1,0 +1,590 @@
+// Chooses how each building looks: its recipe (an Appearance) from its kind, the
+// district it stands in and its id.
+//
+// Variety comes from three sources so that no two neighbours look alike but the
+// town still reads as one place:
+//   kind      a cottage, a tavern and a warehouse have different shapes and details
+//   district  each part of town has its own palette (cream and terracotta in the west
+//             terraces, slate and timber at the wharf, red brick and thatch in the country)
+//   id        a repeatable "random" choice within those, so a given building always
+//             looks the same
+import type { Building } from '../data/buildings';
+import { hash2, pick, seededToggle } from './random';
+import type { MaterialName } from '../themes';
+import type { Appearance, BuildingFamily, Extra, Volume } from './style';
+
+export type District = 'castle' | 'terraces' | 'plaza' | 'wharf' | 'country';
+
+// Which part of town a building stands in. The data file names districts but does
+// not give their outlines, so this is the renderer's reading of the labelled aerial
+// view, by position.
+export function districtOf(b: Building): District {
+  if (b.tier === 'castle') return 'castle';
+  if (b.x >= 56) return 'country';
+  if (b.y >= 40 && b.x >= 30) return 'wharf';
+  if (b.x < 30) return 'terraces';
+  return 'plaza';
+}
+
+export function familyFor(b: Building): BuildingFamily {
+  if (['inn', 'tavern', 'cafe', 'bakery'].includes(b.kind)) return 'inn-tavern';
+  if (['smith', 'workshop', 'warehouse', 'market', 'boathouse', 'barn'].includes(b.kind)) return 'workshop';
+  if (['row', 'store', 'clinic', 'school'].includes(b.kind)) return 'stepped-gable-row';
+  if (['large', 'multi', 'townhall', 'postoffice', 'library', 'observatory', 'granary'].includes(b.kind)) return 'corner-merchant';
+  if (['cottage', 'family', 'lodge', 'mill', 'farm', 'greathall', 'stables', 'barracks', 'storehouse'].includes(b.kind)) return 'gabled-burgher';
+  return 'long-hall';
+}
+
+interface Palette {
+  walls: MaterialName[];
+  roofs: MaterialName[];
+}
+
+const PALETTES: Record<District, Palette> = {
+  castle: { walls: ['wallStone'], roofs: ['roofSlate', 'roofBrown'] },
+  terraces: {
+    walls: ['wallCream', 'wallSand', 'wallPlaster', 'wallCream', 'wallWhite'],
+    roofs: ['roofRed', 'roofBrown', 'roofOrange', 'roofRed', 'roofSlate'],
+  },
+  plaza: {
+    walls: ['wallCream', 'wallSand', 'wallBrick', 'wallPlaster', 'wallBlue', 'wallWhite'],
+    roofs: ['roofRed', 'roofOrange', 'roofSlate', 'roofBrown', 'roofGreen', 'roofBlue'],
+  },
+  wharf: {
+    walls: ['wallTimber', 'wallBrick', 'wallSand', 'wallBlue', 'wallCream'],
+    roofs: ['roofSlate', 'roofBrown', 'roofBlue', 'roofDark'],
+  },
+  country: {
+    walls: ['wallSand', 'wallCream', 'wallBrick', 'wallTimber'],
+    roofs: ['roofRed', 'roofBrown', 'roofThatch', 'roofOrange'],
+  },
+};
+
+function volume(w: number, d: number, floors: number, extra: Partial<Volume> = {}): Volume {
+  return { x0: 0, y0: 0, x1: w, y1: d, floors, roofShape: 'gable', ...extra };
+}
+
+function base(b: Building, wall: MaterialName, roof: MaterialName, volumes: Volume[], extra: Partial<Appearance> = {}): Appearance {
+  return {
+    family: familyFor(b),
+    volumes,
+    wall,
+    roof,
+    plinth: false,
+    timber: false,
+    floorPx: 11,
+    shutters: null,
+    windowHeight: 0.52,
+    windowSpacing: 0.85,
+    door: 'plain',
+    chimneys: 1,
+    awning: null,
+    extras: [],
+    wallTint: (((b.id % 3) - 1) as -1 | 0 | 1),
+    chimneyHeight: seededToggle(b.id, 38, 0.5) ? 9 : 8,
+    ...extra,
+  };
+}
+
+// Plain houses: the shared recipe, used for ordinary homes.
+function plainHouse(b: Building, floors: number, r: (n: number) => number): Appearance {
+  const pal = PALETTES[districtOf(b)];
+  const wall = pick(pal.walls, r(1));
+  let roof = pick(pal.roofs, r(2));
+  const hip = b.w === b.d || r(3) < 0.35;
+  const shutterChoice: (MaterialName | null)[] = [null, 'awnGreen', 'awnBlue', 'roofBrown', 'awnRed'];
+  const lShaped = b.w >= 3 && b.d >= 3 && r(4) < 0.45 && floors >= 2;
+  let volumes: Volume[];
+  if (lShaped) {
+    // A main block at the back and a cross-gabled wing at the front.
+    const split = Math.max(1, Math.round(b.d * 0.55));
+    const wing = Math.max(1, Math.round(b.w * 0.5));
+    volumes = [
+      volume(b.w, split, floors, { roofShape: 'gable', ridge: 'x', ridgeOffset: (r(13) - 0.5) * 0.22 }),
+      { x0: 0, y0: split - 0.2, x1: wing, y1: b.d, floors, roofShape: 'gable', ridge: 'y', ridgeOffset: (r(14) - 0.5) * 0.22 },
+    ];
+  } else {
+    volumes = [volume(b.w, b.d, floors, { roofShape: hip ? 'hip' : 'gable', ridgeOffset: (r(13) - 0.5) * 0.22 })];
+  }
+  if (wall === 'wallTimber' && roof === 'roofBrown') roof = 'roofSlate';
+  return base(b, wall, roof, volumes, {
+    timber: r(5) < 0.3 && wall !== 'wallBrick' && wall !== 'wallTimber',
+    shutters: pick(shutterChoice, r(6)),
+    door: r(7) < 0.3 ? 'arched' : 'plain',
+    chimneys: b.w * b.d >= 9 ? 2 : 1,
+    plinth: r(8) < 0.4,
+    windowSpacing: 0.8 + r(9) * 0.15,
+    extras: r(10) < 0.4 ? [{ type: 'flowerBoxes' }] : [],
+  });
+}
+
+// ---- architectural families ----------------------------------------------------------
+// The town's residential buildings are not one template. Three families, chosen from the
+// building's district, size and id, differ in footprint shape, floors, materials, roof
+// silhouette and features:
+//   wealthy   large dressed-stone townhouses, three floors, slate hip roofs, quoins, a
+//             balcony over the door; the biggest are U-shaped around a courtyard
+//   merchant  a stone ground floor under jettied timber floors, steep gables, big windows,
+//             a sign or an awning
+//   ordinary  small plaster and timber homes with thatch, tile or shingle roofs, one or two
+//             floors, sometimes with a low lean-to extension
+type Family = 'wealthy' | 'merchant' | 'ordinary';
+
+function familyOf(b: Building, r: (n: number) => number): Family {
+  const area = b.w * b.d;
+  const d = districtOf(b);
+  if (b.kind === 'large' || b.kind === 'multi') return d === 'terraces' ? 'wealthy' : 'merchant';
+  if (area >= 9 && d === 'terraces' && b.y <= 38 && r(20) < 0.6) return 'wealthy';
+  if (area >= 6 && (d === 'plaza' || d === 'wharf') && r(21) < 0.65) return 'merchant';
+  if (area >= 8 && d === 'terraces' && r(22) < 0.3) return 'merchant';
+  return 'ordinary';
+}
+
+function wealthyHouse(b: Building, r: (n: number) => number): Appearance {
+  const wall = pick<MaterialName>(['wallStone', 'wallSand', 'wallStone', 'wallWhite'], r(1));
+  const roof = pick<MaterialName>(['roofSlate', 'roofSlate', 'roofDark', 'roofBrown'], r(2));
+  const floors = b.w * b.d >= 12 ? 3 : r(3) < 0.5 ? 3 : 2;
+  let volumes: Volume[];
+  if (b.w >= 5 && b.d >= 4) {
+    // U-shaped: a main block at the back and two wings forward round an open courtyard.
+    const back = Math.max(2, Math.round(b.d * 0.5));
+    const wing = Math.max(1.4, Math.min(2, b.w * 0.3));
+    volumes = [
+      volume(b.w, back, floors, { roofShape: 'hip', pitch: 0.5 }),
+      { x0: 0, y0: back - 0.1, x1: wing, y1: b.d, floors, roofShape: 'gable', ridge: 'y', pitch: 0.55 },
+      { x0: b.w - wing, y0: back - 0.1, x1: b.w, y1: b.d, floors, roofShape: 'gable', ridge: 'y', pitch: 0.55 },
+    ];
+  } else if (b.w >= 4 && r(4) < 0.5) {
+    // A main block with a taller stair tower at the front corner.
+    const tw = 1.5;
+    volumes = [
+      volume(b.w, b.d, floors, { roofShape: 'hip', pitch: 0.5 }),
+      { x0: b.w - tw, y0: Math.max(0, b.d - tw), x1: b.w, y1: b.d, floors: floors + 1, roofShape: 'hip', pitch: 1.1, floorPx: 11 },
+    ];
+  } else {
+    volumes = [volume(b.w, b.d, floors, { roofShape: 'hip', pitch: 0.48 })];
+  }
+  return base(b, wall, roof, volumes, {
+    plinth: true,
+    quoins: true,
+    balcony: floors >= 2 && b.w >= 3,
+    door: 'arched',
+    windowHeight: 0.64,
+    windowSpacing: 0.75,
+    shutters: pick<MaterialName | null>([null, 'awnBlue', 'awnGreen'], r(6)),
+    chimneys: b.w * b.d >= 15 ? 3 : 2,
+    extras: [],
+  });
+}
+
+function merchantHouse(b: Building, r: (n: number) => number): Appearance {
+  const district = districtOf(b);
+  const floors = b.w * b.d >= 12 ? 3 : 2;
+  const wall = pick<MaterialName>(['wallPlaster', 'wallCream', 'wallSand', 'wallWhite'], r(1));
+  const roof = pick<MaterialName>(district === 'wharf' ? ['roofSlate', 'roofBlue', 'roofBrown'] : ['roofRed', 'roofBrown', 'roofOrange', 'roofSlate'], r(2));
+  // The ridge runs across the street frontage when the building is wider than deep.
+  const volumes: Volume[] = [volume(b.w, b.d, floors, { roofShape: 'gable', ridge: b.w >= b.d ? 'x' : 'y', pitch: 0.7, ridgeOffset: (r(13) - 0.5) * 0.22 })];
+  if (b.w >= 4 && b.d >= 3 && r(5) < 0.5) {
+    // A steep front gable (a dormer-like cross wing) over the door side.
+    volumes.push({ x0: 0.4, y0: b.d - 1.4, x1: Math.min(2.4, b.w - 0.4), y1: b.d, floors: floors, roofShape: 'gable', ridge: 'y', pitch: 0.9 });
+  }
+  const extras: Extra[] = [{ type: 'sign', colour: pick<MaterialName>(['awnRed', 'awnBlue', 'awnGreen', 'awnYellow'], r(7)) }];
+  if (r(12) < 0.35) extras.push({ type: 'dormer' });
+  if (r(8) < 0.4) extras.push({ type: 'flowerBoxes' });
+  return base(b, wall, roof, volumes, {
+    groundWall: 'wallStone',
+    jetty: true,
+    timber: true,
+    door: r(9) < 0.5 ? 'double' : 'arched',
+    awning: r(10) < 0.4 ? pick<MaterialName>(['awnRed', 'awnGreen', 'awnBlue'], r(11)) : null,
+    windowHeight: 0.6,
+    windowSpacing: 0.72,
+    shutters: pick<MaterialName | null>([null, 'awnGreen', 'awnRed'], r(6)),
+    chimneys: 2,
+    extras,
+  });
+}
+
+function ordinaryHouse(b: Building, floors: number, r: (n: number) => number): Appearance {
+  const district = districtOf(b);
+  const wall = pick<MaterialName>(district === 'country' ? ['wallSand', 'wallCream', 'wallTimber', 'wallPlaster'] : ['wallPlaster', 'wallCream', 'wallSand', 'wallBrick', 'wallPlaster'], r(1));
+  let roof = pick<MaterialName>(['roofThatch', 'roofBrown', 'roofRed', 'roofOrange', 'roofBrown'], r(2));
+  if (wall === 'wallTimber' && roof === 'roofBrown') roof = 'roofThatch';
+  const volumes: Volume[] = [];
+  if (b.w >= 3 && b.d >= 2 && r(4) < 0.45) {
+    // A low lean-to extension along the east side, under its own small roof.
+    const ext = Math.min(1.2, b.w * 0.35);
+    volumes.push(volume(b.w - ext, b.d, floors, { roofShape: r(3) < 0.5 ? 'hip' : 'gable', ridge: 'y', pitch: 0.62, ridgeOffset: (r(13) - 0.5) * 0.22 }));
+    volumes.push({ x0: b.w - ext, y0: 0, x1: b.w, y1: Math.max(1, b.d - 0.8), floors: 1, roofShape: 'gable', ridge: 'y', floorPx: 9, pitch: 0.5 });
+  } else {
+    volumes.push(volume(b.w, b.d, floors, { roofShape: b.w === b.d || r(3) < 0.4 ? 'hip' : 'gable', ridge: b.w >= b.d ? 'x' : 'y', pitch: 0.6, ridgeOffset: (r(13) - 0.5) * 0.22 }));
+  }
+  return base(b, wall, roof, volumes, {
+    timber: wall !== 'wallBrick' && wall !== 'wallTimber' && r(5) < 0.55,
+    shutters: pick<MaterialName | null>([null, 'awnGreen', 'awnBlue', 'roofBrown', 'awnRed'], r(6)),
+    door: 'plain',
+    chimneys: 1,
+    plinth: r(8) < 0.5,
+    windowHeight: 0.5,
+    windowSpacing: 0.85 + r(9) * 0.15,
+    extras: r(10) < 0.5 ? [{ type: 'flowerBoxes' }] : [],
+  });
+}
+
+// Houses: pick the family, then build it.
+function house(b: Building, floors: number, r: (n: number) => number): Appearance {
+  const f = familyOf(b, r);
+  if (f === 'wealthy') return wealthyHouse(b, r);
+  if (f === 'merchant') return merchantHouse(b, r);
+  return ordinaryHouse(b, Math.min(floors, b.w * b.d >= 9 ? 2 : floors), r);
+}
+
+export function appearanceFor(b: Building): Appearance {
+  const r = (n: number) => hash2(b.id, n, 91);
+  const district = districtOf(b);
+  const area = b.w * b.d;
+
+  switch (b.kind) {
+    // ---- the six destinations -------------------------------------------------
+    case 'townhall': {
+      // A broad hall with a clock tower in front of it.
+      const main = volume(b.w, b.d - 1.2, 2, { roofShape: 'hip', pitch: 0.5, roof: 'roofRed' });
+      const tower: Volume = { x0: 2.0, y0: b.d - 2.6, x1: 4.2, y1: b.d, floors: 4, roofShape: 'hip', pitch: 1.0, roof: 'roofTeal', floorPx: 12 };
+      return base(b, 'wallCream', 'roofRed', [main, tower], {
+        plinth: true,
+        door: 'arched',
+        shutters: 'awnBlue',
+        windowHeight: 0.62,
+        chimneys: 1,
+        extras: [{ type: 'clock', volume: 1 }, { type: 'steps' }],
+      });
+    }
+    case 'library': {
+      return base(b, 'wallCream', 'roofGreen', [volume(b.w, b.d, 2, { roofShape: 'gable', ridge: 'x', pitch: 0.5 })], {
+        plinth: true,
+        door: 'arched',
+        windowHeight: 0.66,
+        windowSpacing: 0.7,
+        shutters: null,
+        chimneys: 1,
+        extras: [{ type: 'dome' }, { type: 'steps' }, { type: 'sign', colour: 'awnBlue' }],
+      });
+    }
+    case 'postoffice': {
+      return base(b, 'wallBrick', 'roofSlate', [volume(b.w, b.d, 2, { roofShape: 'hip', pitch: 0.55 })], {
+        plinth: true,
+        door: 'double',
+        awning: 'awnBlue',
+        windowSpacing: 0.75,
+        chimneys: 1,
+        extras: [{ type: 'flag' }, { type: 'sign', colour: 'awnRed' }],
+      });
+    }
+    case 'workshop': {
+      return base(b, 'wallBlue', 'roofOrange', [volume(b.w, b.d, 2, { roofShape: 'gable', ridge: b.w >= b.d ? 'x' : 'y', pitch: 0.58 })], {
+        timber: true,
+        door: 'wide',
+        shutters: 'awnGreen',
+        chimneys: 2,
+        extras: [{ type: 'sign', colour: 'roofBrown' }, { type: 'hoist' }],
+      });
+    }
+    case 'signallab': {
+      const tower: Volume = { x0: b.w - 2.2, y0: b.d - 2.4, x1: b.w - 0.2, y1: b.d - 0.4, floors: 4, roofShape: 'hip', pitch: 0.7, roof: 'roofTeal', floorPx: 12 };
+      const main = volume(b.w, b.d, 2, { roofShape: 'flat', roof: 'roofSlate' });
+      return base(b, 'wallPlaster', 'roofSlate', [main, tower], {
+        plinth: true,
+        door: 'plain',
+        awning: 'awnGreen',
+        windowHeight: 0.6,
+        windowSpacing: 0.7,
+        chimneys: 0,
+        shutters: 'awnGreen',
+        extras: [{ type: 'solar' }, { type: 'mast' }],
+      });
+    }
+    case 'cottage':
+      if (b.destination === 'about') {
+        return base(b, 'wallSand', 'roofBrown', [volume(b.w, b.d, 2, { roofShape: 'gable', ridge: 'y', pitch: 0.62 })], {
+          timber: true,
+          plinth: true,
+          door: 'arched',
+          shutters: 'awnGreen',
+          chimneys: 1,
+          windowHeight: 0.56,
+          extras: [{ type: 'flowerBoxes' }, { type: 'steps' }],
+        });
+      }
+      return house(b, area <= 6 && r(11) < 0.6 ? 1 : 2, r);
+
+    // ---- castle buildings that are houses of stone -------------------------------
+    case 'greathall':
+      return base(b, 'wallStone', 'roofSlate', [volume(b.w, b.d, 2, { roofShape: 'gable', ridge: 'x', pitch: 0.5, floorPx: 17 })], {
+        plinth: true,
+        door: 'arched',
+        windowHeight: 0.72,
+        windowSpacing: 0.9,
+        chimneys: 2,
+        extras: [{ type: 'steps' }],
+      });
+    case 'stables':
+      return base(b, 'wallTimber', 'roofBrown', [volume(b.w, b.d, 1, { roofShape: 'gable', floorPx: 14 })], {
+        door: 'wide',
+        plinth: true,
+        windowHeight: 0.4,
+        chimneys: 0,
+      });
+    case 'lodge':
+      return base(b, 'wallStone', 'roofBrown', [volume(b.w, b.d, 1, { roofShape: 'gable', floorPx: 14 })], { plinth: true, chimneys: 1 });
+
+    case 'barracks':
+      return base(b, 'wallStone', 'roofSlate', [volume(b.w, b.d, 2, { roofShape: 'gable', ridge: b.w >= b.d ? 'x' : 'y', pitch: 0.46, floorPx: 15 })], {
+        plinth: true, door: 'plain', windowHeight: 0.5, windowSpacing: 1.1, chimneys: 2, extras: [{ type: 'steps' }],
+      });
+    case 'storehouse':
+      return base(b, 'wallStone', 'roofBrown', [volume(b.w, b.d, 1, { roofShape: 'gable', ridge: 'x', pitch: 0.5, floorPx: 17 })], {
+        plinth: true, door: 'wide', windowHeight: 0.3, windowSpacing: 1.6, chimneys: 0, extras: [{ type: 'barnDoor' }],
+      });
+
+    // ---- countryside and specialised buildings -------------------------------------
+    case 'barn':
+      return base(b, 'wallBrick', 'roofDark', [volume(b.w, b.d, 1, { roofShape: 'gable', ridge: b.w >= b.d ? 'x' : 'y', floorPx: 17, pitch: 0.5 })], {
+        door: 'wide', plinth: true, windowHeight: 0.3, windowSpacing: 1.3, chimneys: 0, extras: [{ type: 'barnDoor' }],
+      });
+    case 'farm': {
+      const main = volume(b.w, Math.max(2, b.d - 1), 2, { roofShape: 'gable', ridge: 'x' });
+      const wing: Volume = { x0: 0, y0: Math.max(1, b.d - 1.8), x1: Math.max(1.6, b.w * 0.5), y1: b.d, floors: 1, roofShape: 'gable', ridge: 'y', floorPx: 12 };
+      return base(b, pick(['wallCream', 'wallSand'] as MaterialName[], r(1)), pick(['roofBrown', 'roofRed'] as MaterialName[], r(2)), b.d >= 3 ? [main, wing] : [volume(b.w, b.d, 2)], {
+        timber: true, plinth: true, shutters: 'awnGreen', chimneys: 2, door: 'arched', extras: [{ type: 'flowerBoxes' }],
+      });
+    }
+    case 'granary':
+      return base(b, 'wallStone', 'roofSlate', [volume(b.w, b.d, 3, { roofShape: 'hip', pitch: 0.85, floorPx: 12 })], {
+        plinth: true, door: 'wide', windowHeight: 0.28, windowSpacing: 1.1, chimneys: 0,
+      });
+    case 'boathouse':
+      return base(b, 'wallTimber', 'roofBlue', [volume(b.w, b.d, 1, { roofShape: 'gable', ridge: 'x', floorPx: 16, pitch: 0.5 })], {
+        door: 'wide', plinth: true, windowHeight: 0.35, chimneys: 1, extras: [{ type: 'sign', colour: 'awnBlue' }],
+      });
+    case 'observatory':
+      return base(b, 'wallWhite', 'roofSlate', [volume(b.w, b.d, 3, { roofShape: 'flat', roof: 'roofSlate', floorPx: 11 })], {
+        plinth: true, door: 'arched', windowHeight: 0.6, windowSpacing: 0.8, chimneys: 0, extras: [{ type: 'dome' }, { type: 'steps' }],
+      });
+    case 'mill':
+      return base(b, 'wallCream', 'roofBrown', [volume(b.w, b.d, 2, { roofShape: 'gable', ridge: 'y', pitch: 0.55 })], {
+        timber: true, plinth: true, door: 'plain', shutters: 'awnBlue', chimneys: 1, extras: [{ type: 'wheel' }],
+      });
+    case 'market':
+      return base(b, 'wallTimber', 'roofBlue', [volume(b.w, b.d, 1, { roofShape: 'gable', ridge: 'x', floorPx: 16, pitch: 0.5 })], {
+        door: 'wide', awning: 'awnBlue', windowHeight: 0.35, windowSpacing: 1.1, chimneys: 0, extras: [{ type: 'sign', colour: 'awnYellow' }],
+      });
+
+    // ---- commercial ----------------------------------------------------------
+    case 'cafe':
+      return base(b, pick(['wallCream', 'wallSand', 'wallWhite'] as MaterialName[], r(1)), pick(['roofRed', 'roofOrange', 'roofGreen'] as MaterialName[], r(2)), [volume(b.w, b.d, 2, { roofShape: 'hip' })], {
+        awning: pick(['awnRed', 'awnGreen', 'awnYellow'] as MaterialName[], r(3)),
+        door: 'double',
+        plinth: true,
+        extras: [{ type: 'flowerBoxes' }, { type: 'sign', colour: 'awnYellow' }],
+      });
+    case 'inn': {
+      const main = volume(b.w, Math.max(2, b.d - 1), 3, { roofShape: 'gable', ridge: 'x', pitch: 0.62 });
+      const stable = { x0: 0, y0: Math.max(1, b.d - 1.2), x1: Math.min(2.2, b.w), y1: b.d, floors: 1, roofShape: 'gable' as const, ridge: 'y' as const, floorPx: 12 };
+      return base(b, 'wallCream', 'roofSlate', [main, stable], {
+        timber: true,
+        awning: 'awnGreen',
+        door: 'double',
+        plinth: true,
+        shutters: 'awnGreen',
+        chimneys: 2,
+        extras: [{ type: 'sign', colour: 'awnRed' }],
+      });
+    }
+    case 'tavern':
+      return base(b, 'wallSand', district === 'wharf' ? 'roofBlue' : 'roofSlate', [volume(b.w, b.d, 2, { roofShape: 'hip' })], {
+        timber: true,
+        door: 'double',
+        plinth: true,
+        chimneys: 1,
+        extras: [{ type: 'sign', colour: 'awnRed' }],
+      });
+    case 'store':
+      return base(b, 'wallBrick', 'roofBrown', [volume(b.w, b.d, 2, { roofShape: 'gable' })], {
+        awning: 'awnBlue',
+        door: 'double',
+        plinth: true,
+        extras: [{ type: 'sign', colour: 'awnBlue' }],
+      });
+    case 'bakery':
+      return base(b, 'wallCream', 'roofOrange', [volume(b.w, b.d, 2, { roofShape: 'hip' })], {
+        awning: 'awnYellow',
+        door: 'double',
+        chimneys: 2,
+        extras: [{ type: 'flowerBoxes' }],
+      });
+    case 'smith':
+      return base(b, 'wallStone', 'roofDark', [volume(b.w, b.d, 1, { roofShape: 'gable', floorPx: 14 })], {
+        door: 'wide',
+        plinth: true,
+        windowHeight: 0.4,
+        chimneys: 2,
+      });
+    case 'warehouse':
+      return base(b, district === 'wharf' ? 'wallTimber' : 'wallSand', 'roofBrown', [volume(b.w, b.d, 2, { roofShape: 'gable', pitch: 0.4, floorPx: 12 })], {
+        door: 'wide',
+        plinth: true,
+        windowHeight: 0.34,
+        windowSpacing: 1.1,
+        chimneys: 0,
+      });
+    case 'clinic':
+      return base(b, 'wallWhite', 'roofGreen', [volume(b.w, b.d, 2, { roofShape: 'hip' })], {
+        plinth: true,
+        door: 'double',
+        windowSpacing: 0.7,
+        shutters: 'awnGreen',
+        extras: [{ type: 'sign', colour: 'awnRed' }],
+      });
+    case 'school':
+      return base(b, 'wallBrick', 'roofSlate', [volume(b.w, b.d, 2, { roofShape: 'hip' })], {
+        plinth: true,
+        door: 'double',
+        windowHeight: 0.6,
+        windowSpacing: 0.7,
+      });
+
+    // ---- ordinary housing ----------------------------------------------------
+    case 'large':
+    case 'multi':
+      return house(b, 3, r);
+    case 'family':
+      return house(b, 2, r);
+    case 'row':
+      return base(b, pick(PALETTES[district].walls, r(1)), pick(PALETTES[district].roofs, r(2)), [volume(b.w, b.d, 2, { roofShape: 'gable' })], {
+        shutters: pick<MaterialName | null>([null, 'awnGreen', 'awnBlue'], r(6)),
+        chimneys: 2,
+        windowSpacing: 0.62,
+        plinth: true,
+        extras: [{ type: 'steppedGable' }],
+      });
+    default:
+      return house(b, area <= 6 ? 1 : 2, r);
+  }
+}
+
+// Exposed so tests can see how many kinds are specially designed.
+export const DESIGNED_KINDS = [
+  'townhall', 'library', 'postoffice', 'workshop', 'signallab', 'cottage', 'cafe', 'inn', 'tavern', 'store',
+  'bakery', 'smith', 'warehouse', 'clinic', 'school', 'large', 'multi', 'family', 'row',
+  'barn', 'farm', 'granary', 'boathouse', 'observatory', 'mill', 'market', 'greathall', 'stables', 'lodge', 'barracks', 'storehouse',
+] as const;
+
+export type { Extra };
+
+export function neighbourSignature(a: Appearance): {
+  family: BuildingFamily;
+  roof: MaterialName;
+  wallTint: -1 | 0 | 1;
+  ridge: 'x' | 'y' | 'hip';
+  storeys: number;
+} {
+  const main = a.volumes[0]!;
+  return {
+    family: a.family,
+    roof: main.roof ?? a.roof,
+    wallTint: a.wallTint ?? 0,
+    ridge: main.roofShape === 'gable' ? (main.ridge ?? 'x') : 'hip',
+    storeys: main.floors,
+  };
+}
+
+function isResidentialNeighbour(b: Building): boolean {
+  return !['tower', 'keep', 'gate', 'windmill', 'fountain', 'stall', 'bandstand', 'cathedral', 'chapel'].includes(b.kind);
+}
+
+export function neighbourRuleHolds(
+  buildings: readonly Building[],
+  appearances: ReadonlyMap<number, Appearance>,
+): boolean {
+  for (let i = 0; i < buildings.length; i++) {
+    const a = buildings[i]!;
+    if (!isResidentialNeighbour(a)) continue;
+    const sa = appearances.get(a.id);
+    if (!sa) continue;
+    for (let j = i + 1; j < buildings.length; j++) {
+      const b = buildings[j]!;
+      if (!isResidentialNeighbour(b)) continue;
+      const sb = appearances.get(b.id);
+      if (!sb) continue;
+      const gapX = Math.max(0, a.x - (b.x + b.w), b.x - (a.x + a.w));
+      const gapY = Math.max(0, a.y - (b.y + b.d), b.y - (a.y + a.d));
+      const distance = Math.max(gapX, gapY);
+      if (distance > 3) continue;
+      const x = neighbourSignature(sa);
+      const y = neighbourSignature(sb);
+      const differences =
+        Number(x.family !== y.family) +
+        Number(x.roof !== y.roof) +
+        Number(x.wallTint !== y.wallTint) +
+        Number(x.ridge !== y.ridge) +
+        Number(x.storeys !== y.storeys);
+      if (differences < 2) return false;
+    }
+  }
+  return true;
+}
+
+export function appearanceForTown(buildings: readonly Building[]): Map<number, Appearance> {
+  const result = new Map<number, Appearance>();
+  for (const b of buildings) result.set(b.id, appearanceFor(b));
+  for (let pass = 0; pass < 6; pass++) {
+    let changed = false;
+    for (let i = 0; i < buildings.length; i++) {
+      const a = buildings[i]!;
+      if (!isResidentialNeighbour(a)) continue;
+      const aa = result.get(a.id)!;
+      for (let j = i + 1; j < buildings.length; j++) {
+        const b = buildings[j]!;
+        if (!isResidentialNeighbour(b)) continue;
+        const bb = result.get(b.id)!;
+        const gapX = Math.max(0, a.x - (b.x + b.w), b.x - (a.x + a.w));
+        const gapY = Math.max(0, a.y - (b.y + b.d), b.y - (a.y + a.d));
+        if (Math.max(gapX, gapY) > 3) continue;
+
+        const x = neighbourSignature(aa);
+        const y = neighbourSignature(bb);
+        const differences =
+          Number(x.family !== y.family) +
+          Number(x.roof !== y.roof) +
+          Number(x.wallTint !== y.wallTint) +
+          Number(x.ridge !== y.ridge) +
+          Number(x.storeys !== y.storeys);
+        if (differences >= 2) continue;
+
+        const aaTint = aa.wallTint ?? 0;
+        const bbTint = bb.wallTint ?? 0;
+        const roofs: readonly MaterialName[] = ['roofRed', 'roofBrown', 'roofSlate', 'roofOrange', 'roofThatch'];
+        const alternateRoof = roofs.find((roof) => roof !== y.roof) ?? 'roofBrown';
+        result.set(a.id, {
+          ...aa,
+          wallTint: (aaTint === 1 ? -1 : aaTint + 1) as -1 | 0 | 1,
+          roof: alternateRoof,
+          volumes: aa.volumes.map((volume, index) => {
+            if (index !== 0) return volume;
+            const ridge = volume.roofShape === 'gable'
+              ? (volume.ridge === 'x' ? 'y' : 'x')
+              : volume.ridge;
+            return { ...volume, roof: alternateRoof, ridge, ridgeOffset: (a.id % 2 === 0 ? -0.1 : 0.1) };
+          }),
+        });
+        result.set(b.id, {
+          ...bb,
+          wallTint: (bbTint === -1 ? 1 : bbTint - 1) as -1 | 0 | 1,
+        });
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  return result;
+}

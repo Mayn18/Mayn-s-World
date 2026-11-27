@@ -1,2 +1,479 @@
+/* The pixel font, bundled from node_modules so it is served from our own
+   origin (no third-party font host). Only the heading and label font is
+   pixel-style; body text uses the system font for readability. */
+@import '@fontsource-variable/pixelify-sans/wght.css';
+
 /* Tailwind v4 is enabled by this single import; the Vite plugin does the rest. */
 @import 'tailwindcss';
+
+/* Tailwind utilities (bg-paper, text-ink, border-border, ...) for the theme's
+   colours. `inline` makes each utility use var(--c-ink) directly, so changing
+   the CSS variables (see src/client/world/themes.ts) restyles everything with
+   no rebuild. Only colours the interface itself uses are listed; scene colours
+   are used by sprites through the variables. */
+@theme inline {
+  --color-ink: var(--c-ink);
+  --color-ink-muted: var(--c-ink-muted);
+  --color-paper: var(--c-paper);
+  --color-paper-shade: var(--c-paper-shade);
+  --color-border: var(--c-border);
+  --color-accent: var(--c-accent);
+  --color-accent-ink: var(--c-accent-ink);
+  --color-plank: var(--c-plank);
+  --color-plank-ink: var(--c-plank-ink);
+  --color-focus: var(--c-focus);
+
+  /* font-pixel for headings and labels. The fallbacks keep the page readable
+     if the font file fails to load. */
+  --font-pixel: 'Pixelify Sans Variable', ui-monospace, 'Cascadia Code', Menlo, monospace;
+}
+
+html {
+  background: var(--c-sky-low);
+  color: var(--c-ink);
+}
+
+body {
+  margin: 0;
+  /* The page is one full-window world and never scrolls. Without this, 100vw
+     (which includes any scrollbar's width) could add a horizontal scrollbar. */
+  overflow: hidden;
+  /* Readable body font; the pixel font is opt-in with font-pixel. */
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  line-height: 1.6;
+}
+
+/* Pixel surfaces. The notched corners come from four hard (zero-blur) shadows
+   in the border colour instead of a real border: a border would have square
+   corners. Shadows take no layout space, so they can overlap the page margin by
+   4px; keep a little room around panels. A fifth shadow is the drop shadow. */
+@layer components {
+  .pixel-panel {
+    background: var(--c-paper);
+    color: var(--c-ink);
+    box-shadow:
+      0 -4px 0 0 var(--c-border),
+      0 4px 0 0 var(--c-border),
+      -4px 0 0 0 var(--c-border),
+      4px 0 0 0 var(--c-border),
+      0 10px 0 0 var(--c-border);
+  }
+
+  /* A pixel button. Works on <a> and <button>. 44px tall minimum is the
+     recommended touch target size. */
+  .pixel-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+    font-family: var(--font-pixel);
+    font-weight: 600;
+    font-size: 1rem;
+    text-decoration: none;
+    cursor: pointer;
+    background: var(--c-accent);
+    color: var(--c-accent-ink);
+    box-shadow:
+      0 -3px 0 0 var(--c-border),
+      0 3px 0 0 var(--c-border),
+      -3px 0 0 0 var(--c-border),
+      3px 0 0 0 var(--c-border),
+      0 7px 0 0 var(--c-border);
+    transition: transform 80ms steps(2);
+  }
+  .pixel-button:hover {
+    transform: translateY(-1px);
+  }
+  /* A calmer button for secondary actions: paper colours instead of green. */
+  .pixel-button-quiet {
+    background: var(--c-paper-shade);
+    color: var(--c-ink);
+  }
+  .pixel-button:disabled {
+    cursor: not-allowed;
+    background: var(--c-paper-shade);
+    color: var(--c-ink-muted);
+    transform: none;
+  }
+
+  /* A clickable card in the destination index. */
+  .pixel-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-height: 64px;
+    padding: 0.75rem 1rem;
+    color: var(--c-ink);
+    text-decoration: none;
+    background: var(--c-paper-shade);
+    box-shadow:
+      0 -3px 0 0 var(--c-border),
+      0 3px 0 0 var(--c-border),
+      -3px 0 0 0 var(--c-border),
+      3px 0 0 0 var(--c-border),
+      0 7px 0 0 var(--c-border);
+    transition: transform 80ms steps(2);
+  }
+  .pixel-card:hover {
+    background: var(--c-plank);
+    transform: translateY(-1px);
+  }
+  /* The destination whose panel is open. The text also says so for screen
+     readers (aria-current); colour is only the visual hint. */
+  .pixel-card[aria-current='true'] {
+    background: var(--c-accent);
+    color: var(--c-accent-ink);
+  }
+
+  /* Pressed: the button sinks into its shadow. */
+  .pixel-button:active {
+    transform: translateY(3px);
+    box-shadow:
+      0 -3px 0 0 var(--c-border),
+      0 3px 0 0 var(--c-border),
+      -3px 0 0 0 var(--c-border),
+      3px 0 0 0 var(--c-border);
+  }
+}
+
+/* ---- The meadow stage ---------------------------------------------------
+   The stage keeps the picture's 16:9 shape at any width. Everything inside is
+   positioned in percentages (see MeadowScene.tsx), so it scales as one piece.
+   container-type lets text inside size itself relative to the stage width
+   (the "cqw" unit = 1% of the stage's width) instead of the browser window. */
+.stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  container-type: inline-size;
+  overflow: hidden;
+  background: var(--c-sky-low);
+  box-shadow:
+    0 -4px 0 0 var(--c-border),
+    0 4px 0 0 var(--c-border),
+    -4px 0 0 0 var(--c-border),
+    4px 0 0 0 var(--c-border),
+    0 10px 0 0 var(--c-border);
+}
+.stage svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* Two classes, so this beats `.stage svg` above without needing !important. */
+.stage .stage-backdrop {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+.stage-item {
+  position: absolute;
+}
+
+/* A destination object in the meadow: the sprite plus a label. */
+.scene-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.scene-link-sprite {
+  transition: transform 80ms steps(2);
+}
+.scene-link:hover .scene-link-sprite,
+.scene-link:focus-visible .scene-link-sprite {
+  transform: translateY(-3%);
+}
+
+/* Wooden labels: the same look for labels under objects and signpost planks.
+   font-size follows the stage width, with an 11px floor for legibility. */
+.scene-label,
+.scene-plank {
+  font-family: var(--font-pixel);
+  font-weight: 600;
+  font-size: 11px;
+  font-size: max(11px, 2cqw);
+  line-height: 1.1;
+  white-space: nowrap;
+  padding: 0.2em 0.55em;
+  background: var(--c-plank);
+  color: var(--c-plank-ink);
+  box-shadow:
+    0 -2px 0 0 var(--c-border),
+    0 2px 0 0 var(--c-border),
+    -2px 0 0 0 var(--c-border),
+    2px 0 0 0 var(--c-border);
+  text-decoration: none;
+}
+.scene-label {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 0.35em);
+}
+.scene-plank {
+  position: absolute;
+  margin-top: 2px;
+  /* WCAG asks for touch targets of at least 24 x 24 CSS pixels. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+/* Hover and focus make a label obvious, without relying on colour alone: the
+   ring (see :focus-visible) and the arrow-like lift also change. */
+.scene-link:hover .scene-label,
+.scene-link:focus-visible .scene-label,
+.scene-plank:hover,
+.scene-plank:focus-visible {
+  background: var(--c-accent);
+  color: var(--c-accent-ink);
+}
+
+/* ---- Ambient animation ----------------------------------------------------
+   Only transform is animated, which the browser can do without re-laying-out
+   the page. Both are switched off by the in-page switch (data-motion="off"), by
+   a hidden tab (paused) and by the operating-system reduced-motion setting
+   (see above). */
+@keyframes drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--drift, 5cqw));
+  }
+}
+/* One art pixel is 1/7 of a 7-pixel-wide flower. steps(1) makes it hop a whole
+   pixel instead of sliding, which keeps the pixel-art look. */
+@keyframes sway {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(14.2857%);
+  }
+}
+.ambient-drift {
+  animation: drift var(--duration, 60s) ease-in-out var(--delay, 0s) infinite alternate;
+}
+.ambient-sway {
+  animation: sway 3s steps(1, end) var(--delay, 0s) infinite;
+}
+html[data-motion='off'] .ambient-drift,
+html[data-motion='off'] .ambient-sway {
+  animation: none;
+}
+html[data-page-hidden] .ambient-drift,
+html[data-page-hidden] .ambient-sway {
+  animation-play-state: paused;
+}
+
+/* Keyboard focus. :focus-visible shows the ring for keyboard users but not for
+   mouse clicks. The 3px ring with a 2px gap sits outside the element, on its
+   surroundings, which themes.test.ts checks have enough contrast. */
+:focus-visible {
+  outline: 3px solid var(--c-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--c-focus-contrast);
+}
+/* Pixel buttons and cards have a 3px notched border drawn as a shadow, so their
+   ring sits further out to stay clear of it. */
+.pixel-button:focus-visible,
+.pixel-card:focus-visible,
+.scene-plank:focus-visible {
+  outline-offset: 6px;
+}
+
+/* Respect the visitor's operating-system setting. This is a safety net that
+   covers every animation and transition, including ones added later. The
+   in-page "ambient motion" switch (see the scene styles) is separate. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* The world fills the browser window (world/TownCanvas.tsx, app/App.tsx).
+
+   .world-viewport is exactly the window: 100vw wide and 100dvh tall. "dvh" is the
+   *dynamic* viewport height, which follows a phone's address bar as it shows and
+   hides; plain 100vh would be taller than the visible area and push the bottom
+   of the world off screen. The background is the sky, so the space around the
+   terrain (the terrain keeps its proportions and is centred, see
+   render/viewTransform.ts) reads as open sky rather than as letterbox bars. */
+.world-viewport {
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: linear-gradient(to bottom, var(--c-sky-top), var(--c-sky-mid) 55%, var(--c-sky-low));
+}
+
+/* The canvas's own box: the code reads this box's size and draws into it. */
+.world-box {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.world-box.is-panning,
+.world-box.is-panning * {
+  cursor: grabbing;
+}
+.world-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: inherit;
+  -webkit-user-drag: none;
+  image-rendering: pixelated;
+}
+
+.world-animation-overlay {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+.world-motion-control {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: min(224px, calc(100vw - 32px));
+}
+
+/* Developer readout of the tile under the pointer. A small label over the world,
+   not page content; it goes when real interaction exists. */
+.world-readout {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 4px 10px;
+  max-width: calc(100% - 24px);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--c-ink);
+  background: color-mix(in srgb, var(--c-paper) 88%, transparent);
+  pointer-events: none;
+}
+
+.world-theme-selector {
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  right: 16px;
+  width: min(224px, calc(100vw - 32px));
+}
+
+.world-theme-toggle {
+  width: 100%;
+  min-height: 48px;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.world-theme-toggle strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.world-theme-options {
+  margin-top: 12px;
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.world-theme-options[hidden] {
+  display: none;
+}
+
+.world-theme-options ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.world-theme-choice {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  font: inherit;
+  font-family: var(--font-pixel);
+  text-align: left;
+  color: var(--c-ink);
+  background: var(--c-paper-shade);
+  cursor: pointer;
+}
+
+.world-theme-choice:hover,
+.world-theme-choice[aria-pressed='true'] {
+  color: var(--c-accent-ink);
+  background: var(--c-accent);
+}
+
+.world-fallback {
+  margin: 0;
+  padding: 24px;
+}
+
+@media (max-width: 520px) {
+  .world-viewport {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px;
+    box-sizing: border-box;
+  }
+
+  .world-motion-control {
+    position: relative;
+    order: 1;
+    top: auto;
+    right: auto;
+    left: auto;
+    max-width: none;
+  }
+
+  .world-motion-control > button {
+    min-height: 48px;
+  }
+
+  .world-motion-control > span {
+    flex: 1 1 100%;
+  }
+
+  .world-theme-selector {
+    position: relative;
+    order: 2;
+    top: auto;
+    right: auto;
+    left: auto;
+    width: auto;
+  }
+
+  .world-theme-options {
+    max-height: max(72px, calc(100dvh - 200px));
+    overscroll-behavior: contain;
+  }
+}

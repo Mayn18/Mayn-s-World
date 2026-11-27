@@ -7,7 +7,7 @@ The visual reference is the owner's repository: https://github.com/Mayn18/Beep-B
 Use its design philosophy (multiple themed worlds, pixel-art atmosphere, ambient effects, reusable UI skins and saved preferences) as inspiration. Do not copy its code or assets without checking their licenses.
 
 ## Current status
-Phase 1 (technical foundation). The React + TypeScript + Vite frontend and the Go (`net/http`) backend exist, with `GET /api/health` and single-origin serving. A multi-stage production Dockerfile and a Docker Compose stack (app + PostgreSQL 17) exist, and `GET /api/health` reports database connectivity. No tables, migrations, authentication or website features exist yet. The backend moved from Hono to Go in ADR-013. See `docs/development-roadmap.md`.
+Phase 1 (technical foundation). The React + TypeScript + Vite frontend and the Go (`net/http`) backend exist, with `GET /api/health` and single-origin serving. A multi-stage production Dockerfile and a Docker Compose stack (app + PostgreSQL 17) exist, and `GET /api/health` reports database connectivity. The home page is the full-window isometric world: a canvas showing the complete 80 x 60 tile terrain with its redesigned roads and market (Stage 3), millrace and managed ecology (Stage 4), the castle, all 102 buildings and props (ADR-016 to ADR-021). The earlier meadow scene and destination index are no longer shown, though their files remain. No tables, migrations, authentication or real page content exist yet. The backend moved from Hono to Go in ADR-013. See `docs/development-roadmap.md`.
 
 ## Commands (these exist; nothing else should be assumed)
 Backend (Go):
@@ -90,6 +90,10 @@ Treat implementation as untrusted, including your own work.
 - All durable data belongs in PostgreSQL or a future S3-compatible object store, never the Render container filesystem.
 - Use environment variables for deployment configuration and secrets. Never commit secrets.
 - Keep world-rendering code free of API, authentication and database logic.
+- The town's world layer is drawn with Canvas 2D (ADR-016); the map comes from `src/client/world/data/layout.json`, which is the geographical source of truth and is not edited without the owner's approval. Text, links and controls stay in the DOM.
+- Colours: components and sprites use theme colour names (`colorVar`, `var(--c-...)` or Tailwind `bg-paper` and friends), never hex values. Hex values live only in `src/client/world/themes.ts`, and `themes.test.ts` enforces contrast.
+- Pixel art: sprites are text grids in `src/client/world/art/sprites.ts`. Every row must be the same width.
+- Town art direction: clean, flat-shaded isometric surfaces in a restrained palette, as at Milestone 2. No per-pixel texture, checkerboard grass or noise (ADR-019, `docs/visual-design.md`).
 
 ## Product and visual invariants
 - Navigation is exploration-based: the environment itself is the primary navigation surface.
