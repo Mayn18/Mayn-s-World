@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { townBuildings, townDecor, townWalls } from '../data/loader';
 import { townModel } from '../terrain/town';
-import { castleHeight, towerSpec } from './castle';
+import { castleHeight, keepTurretGroups, towerSpec } from './castle';
 import { SPECIAL_KINDS, specialHeight } from './specials';
 import { doorPlacement, roofHeightAt, windowCentres } from './painter';
 import { REVIEW_IDS, buildScene, wallTiles } from './scene';
@@ -165,6 +165,19 @@ describe('scene', () => {
 });
 
 describe('castle silhouette', () => {
+  it('groups the keep turrets by depth without changing their positions or roof colors', () => {
+    expect(keepTurretGroups(8, 5, 1.25)).toEqual({
+      rear: [
+        { x: 0.5, y: 0.5, roof: 'roofRed' },
+        { x: 7.5, y: 0.5, roof: 'roofSlate' },
+      ],
+      front: [
+        { x: 0.5, y: 3.65, roof: 'roofRed' },
+        { x: 7.5, y: 3.65, roof: 'roofSlate' },
+      ],
+    });
+  });
+
   it('makes the keep taller than each tower while keeping tower profiles varied', () => {
     const keep = townBuildings.find((b) => b.kind === 'keep')!;
     const towers = townBuildings.filter((b) => b.kind === 'tower');

@@ -353,12 +353,45 @@ function paintTower(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: 
 
 // ---- keep -------------------------------------------------------------------------
 
+type KeepTurret = { x: number; y: number; roof: 'roofRed' | 'roofSlate' };
+
+export function keepTurretGroups(
+  w: number,
+  d: number,
+  fb: number,
+): { rear: KeepTurret[]; front: KeepTurret[] } {
+  const corners: [number, number][] = [
+    [0.5, 0.5],
+    [w - 0.5, 0.5],
+    [0.5, d - fb - 0.1],
+    [w - 0.5, d - fb - 0.1],
+  ];
+  const turrets = corners
+    .sort((p, q) => p[0] + p[1] - (q[0] + q[1]))
+    .map(([x, y], index) => ({ x, y, roof: index < 2 ? 'roofRed' as const : 'roofSlate' as const }));
+
+  // Smaller map y is farther from the southeast viewer.
+  return {
+    rear: turrets.filter(({ y }) => y === 0.5),
+    front: turrets.filter(({ y }) => y !== 0.5),
+  };
+}
+
 function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: BuildingPalette, includeCloth: boolean): void {
   const stone = pal.m.wallStone;
   const slate = pal.m.roofSlate;
   const { w, d } = b;
   const BODY = 84;
   const fb = 1.25; // forebuilding depth
+  const { rear, front } = keepTurretGroups(w, d, fb);
+  const paintTurret = ({ x: cx, y: cy, roof }: KeepTurret) => {
+    cylinder(ctx, o, cx, cy, 0.62, 0, BODY + 18, stone);
+    cylinderCourses(ctx, o, cx, cy, 0.62, 0, BODY + 18, stone);
+    cylinder(ctx, o, cx, cy, 0.7, BODY + 18, BODY + 22, stone);
+    cone(ctx, o, cx, cy, 0.78, BODY + 22, 20, pal.m[roof], { color: pal.snowColor, cover: pal.snowCover });
+  };
+
+  rear.forEach(paintTurret);
 
   // The great block, set back from the front so the forebuilding stands proud of it.
   stoneMass(ctx, o, 0.2, 0.2, w - 0.2, d - fb, 0, BODY, pal);
@@ -421,16 +454,7 @@ function paintKeep(ctx: CanvasRenderingContext2D, o: Origin, b: Building, pal: B
   }
   hipRoof(ctx, o, ux0 - 0.15, uy0 - 0.15, ux1 + 0.15, uy1 + 0.15, BODY + 24, 32, slate, pal);
 
-  // Round corner turrets taller than the parapet, with terracotta cones. Far ones first.
-  const corners: [number, number][] = [[0.5, 0.5], [w - 0.5, 0.5], [0.5, d - fb - 0.1], [w - 0.5, d - fb - 0.1]];
-  corners
-    .sort((p, q) => p[0] + p[1] - (q[0] + q[1]))
-    .forEach(([cx, cy], index) => {
-      cylinder(ctx, o, cx, cy, 0.62, 0, BODY + 18, stone);
-      cylinderCourses(ctx, o, cx, cy, 0.62, 0, BODY + 18, stone);
-      cylinder(ctx, o, cx, cy, 0.7, BODY + 18, BODY + 22, stone);
-      cone(ctx, o, cx, cy, 0.78, BODY + 22, 20, index < 2 ? pal.m.roofRed : pal.m.roofSlate, { color: pal.snowColor, cover: pal.snowCover });
-    });
+  front.forEach(paintTurret);
   banner(ctx, at(o, w / 2, (d - fb) / 2, BODY + 58), 16, pal, 'awnRed', includeCloth);
 }
 
